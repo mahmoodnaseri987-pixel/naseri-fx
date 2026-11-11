@@ -1,0 +1,225 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// یک اپلیکیشن موبایل که در سایت نمایش داده می‌شود
+model App {
+  id         String   @id @default(cuid())
+  nameFa     String
+  nameEn     String
+  categoryFa String
+  categoryEn String
+  descFa     String
+  descEn     String
+  icon       String   @default("Sparkles") // کلید آیکون lucide
+  color      String   @default("emerald") // کلید پالت رنگی
+  installsFa String   @default("۰")
+  installsEn String   @default("0")
+  rating     String   @default("4.5")
+  bazaarUrl  String?
+  playUrl    String?
+  published  Boolean  @default(false) // false = پیش‌نویس، فقط مدیر می‌بیند
+  sortOrder  Int      @default(0) // ترتیب نمایش (کوچک‌تر = بالاتر)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+// تنظیمات سراسری سایت (فقط یک رکورد با id = "main")
+model Settings {
+  id           String   @id @default("main")
+  telegram     String   @default("") // آی‌دی تلگرام بدون @
+  whatsapp     String   @default("") // شماره واتساپ، فرمت بین‌المللی بدون + مثل 98912...
+  email        String   @default("")
+  instagram    String   @default("") // آی‌دی اینستاگرام بدون @
+  passwordHash String   @default("") // هش رمز پنل مدیریت (scrypt)
+  logoUrl      String   @default("") // لوگوی سایت — آدرس داخلی (/api/media/...) یا لینک بیرونی
+  bannerUrl    String   @default("") // تصویر بنر بالای سایت (هیرو)
+  aboutImageUrl String  @default("") // تصویر بخش «درباره من»
+  motionUrl    String   @default("") // ویدیو موشن گرافیک — لینک مستقیم mp4 یا امبد آپارات/یوتیوب
+  motionTitleFa String  @default("موشن گرافیک") // عنوان بخش موشن گرافیک (فارسی)
+  motionTitleEn String  @default("Motion graphic") // عنوان بخش موشن گرافیک (انگلیسی)
+  memberSecret  String  @default("") // سِکِرت امضای توکن نشست اعضا — خودکار ساخته می‌شود
+  updatedAt    DateTime @updatedAt
+}
+
+// عضو سایت — بازدیدکننده‌ای که ثبت‌نام کرده تا بتواند بازی‌ها را اجرا کند
+model Member {
+  id           String    @id @default(cuid())
+  name         String // نام نمایشی
+  username     String    @unique // شماره موبایل یا ایمیل — شناسه ورود
+  passwordHash String // هش رمز (scrypt)
+  avatarUrl    String    @default("") // عکس پروفایل به‌صورت data URL — اجباری برای چت و آرنا
+  blocked      Boolean   @default(false) // مسدودشده توسط مدیر
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+}
+
+// بازی HTML5 تک‌فایلی — فقط اعضای واردشده اجرا می‌کنند
+model Game {
+  id        String   @id @default(cuid())
+  slug      String   @unique // آدرس بازی: /play/{slug}
+  titleFa   String
+  titleEn   String
+  descFa    String   @default("")
+  descEn    String   @default("")
+  icon      String   @default("Gamepad2") // کلید آیکون lucide
+  color     String   @default("emerald") // کلید پالت رنگی
+  coverUrl  String   @default("") // تصویر جلد (اختیاری)
+  html      String   @default("") // محتوای تک‌فایلی HTML بازی
+  sizeBytes Int      @default(0) // حجم فایل بازی
+  plays     Int      @default(0) // شمارش کل اجراها
+  published Boolean  @default(false) // false = پیش‌نویس، فقط مدیر می‌بیند
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ثبت هر بار اجرای بازی توسط یک عضو — برای آمار پنل
+model GamePlay {
+  id        String   @id @default(cuid())
+  gameId    String
+  memberId  String
+  playedAt  DateTime @default(now())
+
+  @@index([gameId])
+  @@index([memberId])
+}
+
+// تنظیم نمایش بازی‌های آرنا در لابی — ترتیب و فعال/غیرفعال بودن (مدیریت از پنل)
+model ArenaGameConfig {
+  slug      String   @id // اسلاگ بازی: speed-challenge و nabard-live و jadval-race و pic-guess و fire-offline
+  enabled   Boolean  @default(true)
+  sortOrder Int      @default(0) // کوچک‌تر = بالاتر در فهرست
+  updatedAt DateTime @updatedAt
+}
+
+// درخواست بازیابی رمز عبور اعضا — کد ۶ رقمی با اعتبار ۱۰ دقیقه
+model PasswordReset {
+  id        String    @id @default(cuid())
+  username  String // شناسه عضو (موبایل یا ایمیل نرمال‌شده)
+  memberId  String
+  codeHash  String // HMAC-SHA256 کد — برای راستی‌آزمایی
+  codeEnc   String // کد رمزنگاری‌شده AES-256-GCM — فقط پنل مدیریت باز می‌کند
+  channel   String // sms | email | admin — راه رساندن کد به عضو
+  expiresAt DateTime
+  usedAt    DateTime?
+  attempts  Int       @default(0) // حداکثر ۵ تلاش
+  createdAt DateTime  @default(now())
+
+  @@index([username, createdAt])
+  @@index([createdAt])
+}
+
+// اتاق رقابتی آرنا — چند عضو دور یک بازی جمع می‌شوند
+model Room {
+  id           String   @id @default(cuid())
+  code         String   @unique // کد ۵ حرفی ورود به اتاق
+  gameSlug     String   // بازی اتاق (فعلاً speed-challenge)
+  roomNumber   Int      @default(0) // شماره نمایشی اتاق از ۱ تا ۳۰
+  hostId       String   // عضو میزبان
+  status       String   @default("lobby") // lobby | playing | finished
+  maxPlayers   Int      @default(8)
+  state        String   @default("{}") // وضعیت بازی به‌صورت JSON
+  lastActivity DateTime @default(now())
+  createdAt    DateTime @default(now())
+
+  members RoomMember[]
+  answers RoomAnswer[]
+
+  @@index([gameSlug, status])
+  @@index([lastActivity])
+}
+
+// عضو حاضر در اتاق — وضعیت آمادگی و امتیاز
+model RoomMember {
+  id         String    @id @default(cuid())
+  roomId     String
+  memberId   String
+  name       String // کپی نام نمایشی
+  isHost     Boolean   @default(false)
+  isReady    Boolean   @default(false)
+  score      Int       @default(0)
+  lastSeenAt DateTime  @default(now())
+  joinedAt   DateTime  @default(now())
+  fireInput  String    @default("{}") // ورودی لحظه‌ای بازی «میدان آتش» — فقط خود بازیکن این ردیف را می‌نویسد
+
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@unique([roomId, memberId])
+  @@index([memberId])
+}
+
+// پاسخ هر عضو به هر سؤال — قید یکتا جلوی پاسخ تکراری را می‌گیرد
+model RoomAnswer {
+  id        String   @id @default(cuid())
+  roomId    String
+  round     Int // شماره سؤال از ۰
+  memberId  String
+  choice    Int // اندیس گزینه انتخابی
+  createdAt DateTime @default(now())
+
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@unique([roomId, round, memberId])
+  @@index([roomId, round])
+}
+
+// پیام‌های چت — لابی عمومی (scope = lobby) و داخل هر اتاق (scope = کد اتاق)
+model ChatMessage {
+  id        Int      @id @default(autoincrement())
+  scope     String // lobby یا کد اتاق
+  memberId  String
+  name      String // کپی نام نمایشی فرستنده
+  content   String   @db.Text // متن پیام؛ در اعلان سیستمی خالی است
+  kind      String   @default("user") // user | system
+  roomCode  String? // اتاق مرتبط با اعلان (کد ۵ حرفی)
+  roomNumber Int     @default(0) // شماره اتاق در اعلان
+  gameSlug  String? // بازی اتاق در اعلان
+  createdAt DateTime @default(now())
+
+  @@index([scope, id])
+  @@index([memberId, id])
+  @@index([createdAt])
+}
+
+// رسانه‌های آپلودشده مدیر (عکس و ویدیو) — محتوا به‌صورت base64 داخل دیتابیس
+model Media {
+  id        String   @id @default(cuid())
+  name      String // نام فایل برای نمایش در پنل
+  mime      String // image/jpeg ، video/mp4 و ...
+  kind      String   @default("image") // image | video
+  size      Int      @default(0) // حجم بایت
+  data      String   @default("") // محتوای فایل به‌صورت base64
+  createdAt DateTime @default(now())
+}
+
+// متن‌های قابل ویرایش سایت — جفت کلید/مقدار؛ کلید مثل hero_title_fa
+model SiteContent {
+  key   String @id
+  value String @default("")
+}
+
+// باکس محتوایی دلخواه که مدیر به صفحه اصلی اضافه می‌کند
+model ContentBox {
+  id          String   @id @default(cuid())
+  titleFa     String
+  titleEn     String
+  bodyFa      String   @default("")
+  bodyEn      String   @default("")
+  icon        String   @default("Sparkles") // کلید آیکون lucide
+  color       String   @default("emerald") // کلید پالت رنگی
+  imageUrl    String   @default("") // تصویر باکس (اختیاری)
+  videoUrl    String   @default("") // ویدیو باکس — مستقیم یا امبد (اختیاری)
+  linkUrl     String? // دکمه لینک (اختیاری)
+  linkLabelFa String   @default("")
+  linkLabelEn String   @default("")
+  published   Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
