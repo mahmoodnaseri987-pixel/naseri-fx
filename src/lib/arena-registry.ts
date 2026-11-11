@@ -17,6 +17,7 @@
    ================================================================ */
 
 import { ARENA_GAME_SLUG } from "@/lib/arena-game";
+import { LUDO_GAME_SLUG } from "@/lib/ludo-shared";
 
 export const BOT_ID_PREFIX = "bot-";
 
@@ -59,7 +60,7 @@ export const FIRE_TEAM_SLUG = "fire";
 /** سقف زمان هر دور اتاق رکوردی — اگر میزبان پایان ندهد، خودکار تمام می‌شود */
 export const SCORE_ROOM_MAX_MS = 15 * 60_000;
 
-export type ArenaGameKind = "quiz" | "fire" | "score" | "nabard" | "fire-retired";
+export type ArenaGameKind = "quiz" | "fire" | "score" | "nabard" | "ludo" | "fire-retired";
 
 export type ArenaGameDef = {
   slug: string;
@@ -105,6 +106,20 @@ export const ARENA_GAMES: ArenaGameDef[] = [
     color: "orange",
     minPlayers: 2,
     maxPlayers: ROOM_CAPACITY_MAX,
+    supportsBots: true,
+    active: true,
+  },
+  {
+    slug: LUDO_GAME_SLUG,
+    kind: "ludo",
+    titleFa: "منچ گروهی",
+    titleEn: "Ludo Party",
+    descFa: "منچ کلاسیک ۲ تا ۴ نفره با تاس، زدن مهره و خانه‌های سورپرایز",
+    descEn: "Classic 2-4 player Ludo — dice, captures and surprise cells",
+    icon: "Dices",
+    color: "emerald",
+    minPlayers: 2,
+    maxPlayers: 4, // چهار رنگ — بیش از این معنا ندارد
     supportsBots: true,
     active: true,
   },

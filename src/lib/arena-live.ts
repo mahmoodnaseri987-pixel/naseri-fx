@@ -22,6 +22,13 @@ import {
 import { JADVAL_GAME_SLUG, JADVAL_TEAM_A, JADVAL_TEAM_B, JADVAL_WORD_POINTS } from "@/lib/jadval-shared";
 import { PIC_GAME_SLUG, PIC_ROUND_MS, picPhase } from "@/lib/pic-shared";
 import { buildPicView, getPicAnswer, parsePicState, submitPicGuess } from "@/lib/pic-engine";
+import { LUDO_GAME_SLUG, type LudoRoomState } from "@/lib/ludo-shared";
+import {
+  buildLudoView,
+  ludoEventTexts,
+  ludoTick,
+  parseLudoState,
+} from "@/lib/ludo-engine";
 import {
   buildJadvalResult,
   buildJadvalView,
@@ -136,6 +143,60 @@ export async function persistFireState(
 }
 
 /* ================================================================
+   ذخیرهٔ وضعیت «منچ» — با گارد «فقط رو به جلو» روی seq
+   ================================================================ */
+
+export async function persistLudoState(roomId: string, lState: LudoRoomState): Promise<boolean> {
+  const json = JSON.stringify(lState);
+  try {
+    const n = await db.$executeRaw`
+      UPDATE "Room" SET state = ${json}, "lastActivity" = now()
+      WHERE id = ${roomId} AND status = 'playing'
+        AND COALESCE(NULLIF(state, '')::jsonb ->> 'seq', '0')::double precision < ${lState.seq}`;
+    return n > 0;
+  } catch {
+    return false;
+  }
+}
+
+/** تسویهٔ نهایی منچ — امتیاز رتبه‌ها + بستن اتاق؛ فقط یک‌بار اجرا می‌شود */
+export async function settleLudo(
+  roomId: string,
+  lState: LudoRoomState,
+  names: Record<string, string>,
+): Promise<void> {
+  if (!lState.result) return;
+  try {
+    await db.$transaction(async (tx) => {
+      const n = await tx.$executeRaw`
+        UPDATE "Room" SET status = 'finished', state = ${JSON.stringify(lState)}, "lastActivity" = now()
+        WHERE id = ${roomId} AND status = 'playing'`;
+      if (n === 0) return; // نمونهٔ دیگر تسویه کرده است
+      for (const row of lState.result!) {
+        await tx.roomMember.updateMany({
+          where: { roomId, memberId: row.id },
+          data: { score: pointsForRank(row.rank) },
+        });
+      }
+      const winner = lState.result!.find((r) => r.rank === 1);
+      if (winner) {
+        await tx.chatMessage.create({
+          data: {
+            scope: await tx.room.findUnique({ where: { id: roomId } }).then((r) => r?.code ?? ""),
+            memberId: winner.id,
+            name: names[winner.id] ?? "بازیکن",
+            content: `${names[winner.id] ?? "بازیکن"} برندهٔ منچ شد! 🎲`,
+            kind: "system",
+          },
+        });
+      }
+    });
+  } catch {
+    /* خطای گذرا — اسنپ‌شات بعدی دوباره تلاش می‌کند */
+  }
+}
+
+/* ================================================================
    قطعی‌سازی «رقابت جدول» — پایان با تایم‌اوت یا تکمیل جدول
    ================================================================ */
 
@@ -226,6 +287,7 @@ async function buildSnapshot(code: string): Promise<RoomSnapshot | null> {
   const isFire = room.gameSlug === FIRE_GAME_SLUG;
   const isJadval = room.gameSlug === JADVAL_GAME_SLUG;
   const isPic = room.gameSlug === PIC_GAME_SLUG;
+  const isLudo = room.gameSlug === LUDO_GAME_SLUG;
   const state = parseState(room.state);
   const now = Date.now();
   let status = room.status;
@@ -431,10 +493,41 @@ async function buildSnapshot(code: string): Promise<RoomSnapshot | null> {
     }
   }
 
+  /* «منچ»: تیک خودکار — مهلت‌ها، ربات‌ها و تسویهٔ نتیجه */
+  let ludoState: LudoRoomState | null = null;
+  if (isLudo && (status === "playing" || status === "finished")) {
+    ludoState = parseLudoState(room.state);
+  }
+  if (isLudo && status === "playing" && ludoState) {
+    const memberIds = new Set(room.members.map((m) => m.memberId));
+    const namesOf: Record<string, string> = {};
+    for (const m of room.members) namesOf[m.memberId] = m.name;
+    const tick = ludoTick(ludoState, { now: Date.now(), memberIds });
+    if (tick.mutated) {
+      room.state = JSON.stringify(ludoState);
+      await persistLudoState(room.id, ludoState);
+      /* رخدادهای تیک (ربات‌ها و مهلت‌خورده‌ها) به چت اتاق می‌رود */
+      try {
+        const texts = ludoEventTexts(tick.events, namesOf);
+        for (const content of texts) {
+          await db.chatMessage.create({
+            data: { scope: room.code, memberId: "system", name: "منچ", content, kind: "system" },
+          });
+        }
+      } catch {
+        /* چت حیاتی نیست */
+      }
+    }
+    if (ludoState.result) {
+      await settleLudo(room.id, ludoState, namesOf);
+      status = "finished";
+    }
+  }
+
   /* اگر مسابقه کوییز زمانش تمام شده، وضعیت را در دیتابیس قطعی کن
      (بازی‌های با وضعیت اختصاصی مستثنا هستند) */
   if (
-    !isNabard && !isFire && !isJadval && !isPic &&
+    !isNabard && !isFire && !isJadval && !isPic && !isLudo &&
     status === "playing" &&
     computePhase(state.startedAtMs, now).status === "finished"
   ) {
@@ -480,7 +573,9 @@ async function buildSnapshot(code: string): Promise<RoomSnapshot | null> {
   let answeredRound = -1;
   let answered: Record<string, number> = {};
   let phaseKey = "";
-  if (!isNabard && !isFire && !isJadval && !isPic && status === "playing") {
+  if (
+    !isNabard && !isFire && !isJadval && !isPic && !isLudo && status === "playing"
+  ) {
     const phase = computePhase(state.startedAtMs, Date.now());
     if (phase.status === "playing") {
       answeredRound = phase.round;
@@ -511,6 +606,9 @@ async function buildSnapshot(code: string): Promise<RoomSnapshot | null> {
     const pState = parsePicState(room.state);
     const ph = pState ? picPhase(pState, now) : null;
     phaseKey = ph && ph.status === "playing" ? `pg:${ph.round}:${ph.phase}` : `pg:${ph?.status ?? "?"}`;
+  }
+  if (isLudo && status === "playing") {
+    phaseKey = `lu:${ludoState?.seq ?? 0}`;
   }
 
   const members: SnapMember[] = room.members.map((m) => ({
@@ -600,6 +698,7 @@ export function viewFromSnapshot(
   const isFire = room.gameSlug === FIRE_GAME_SLUG;
   const isJadval = room.gameSlug === JADVAL_GAME_SLUG;
   const isPic = room.gameSlug === PIC_GAME_SLUG;
+  const isLudo = room.gameSlug === LUDO_GAME_SLUG;
   const onlineCutoff = now - ONLINE_MS;
 
   const members: ArenaMemberView[] = snap.members.map((m) => ({
@@ -680,6 +779,21 @@ export function viewFromSnapshot(
     }
   }
 
+  /* نمای «منچ» — کل صفحه برای همه دیده می‌شود؛ فقط حضور آنلاین هر عضو محاسبه می‌شود */
+  let ludo: import("@/lib/ludo-shared").LudoView | null = null;
+  if (isLudo && (room.status === "playing" || room.status === "finished")) {
+    const ls = parseLudoState(snap.rawState);
+    if (ls) {
+      const names: Record<string, string> = {};
+      const onlineIds = new Set<string>();
+      for (const m of snap.members) {
+        names[m.id] = m.name;
+        if (isBotId(m.id) || m.lastSeenMs >= onlineCutoff) onlineIds.add(m.id);
+      }
+      ludo = buildLudoView(ls, memberId, names, now, onlineIds);
+    }
+  }
+
   return {
     now,
     me: memberId,
@@ -698,6 +812,7 @@ export function viewFromSnapshot(
     fire,
     jadval,
     pic,
+    ludo,
   };
 }
 

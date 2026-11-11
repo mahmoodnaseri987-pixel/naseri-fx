@@ -12,6 +12,7 @@ import { ARENA_GAME_SLUG } from "@/lib/arena-game";
 import { NABARD_GAME_SLUG } from "@/lib/nabard-engine";
 import { JADVAL_GAME_SLUG } from "@/lib/jadval-shared";
 import { PIC_GAME_SLUG } from "@/lib/pic-shared";
+import { LUDO_GAME_SLUG } from "@/lib/ludo-shared";
 
 export type CatalogGameKind = "room" | "banner"; // banner = کارت ویژهٔ لابی (آتش آفلاین)
 
@@ -22,7 +23,7 @@ export type CatalogGame = {
   titleEn: string;
   descFa: string;
   descEn: string;
-  icon: "swords" | "zap" | "grid" | "image" | "flame";
+  icon: "swords" | "zap" | "grid" | "image" | "flame" | "dice";
   enabled: boolean;
   sortOrder: number;
 };
@@ -64,6 +65,15 @@ export const ARENA_CATALOG_DEFS: Omit<CatalogGame, "enabled" | "sortOrder">[] = 
     descFa: "پازل ایموجی، سرعت واکنش — اولین پاسخ درست صاحب امتیاز است",
     descEn: "Emoji puzzle — first correct answer takes the point",
     icon: "image",
+  },
+  {
+    slug: LUDO_GAME_SLUG,
+    kind: "room",
+    titleFa: "منچ گروهی",
+    titleEn: "Ludo Party",
+    descFa: "منچ کلاسیک ۲ تا ۴ نفره — جفت‌شش، زدن مهره و ۵ خانهٔ سورپرایز",
+    descEn: "Classic Ludo for 2-4 — double six, captures, 5 surprise cells",
+    icon: "dice",
   },
   {
     slug: "fire-offline",

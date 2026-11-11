@@ -124,7 +124,7 @@ export type AdminArenaGame = {
   titleEn: string;
   descFa: string;
   descEn: string;
-  icon: "swords" | "zap" | "grid" | "image" | "flame";
+  icon: "swords" | "zap" | "grid" | "image" | "flame" | "dice";
   enabled: boolean;
   activeRooms: number;
 };
@@ -229,6 +229,9 @@ export type JadvalViewType = import("@/lib/jadval-shared").JadvalView;
 /* بازی «حدس تصویر» — پاسخ دور جاری فقط در فاز نمایش می‌آید */
 export type PicViewType = import("@/lib/pic-shared").PicView;
 
+/* بازی «منچ» — تختهٔ گروهی؛ همه چیز بازی برای همه دیده می‌شود */
+export type LudoViewType = import("@/lib/ludo-shared").LudoView;
+
 export type ArenaStateResponse = {
   now: number;
   me: string;
@@ -247,6 +250,7 @@ export type ArenaStateResponse = {
   fire: FireView | null;
   jadval: JadvalViewType | null;
   pic: PicViewType | null;
+  ludo: LudoViewType | null;
 };
 
 /* ---------- چت (لابی عمومی و داخل اتاق) ---------- */

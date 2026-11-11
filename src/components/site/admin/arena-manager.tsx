@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
+  Dices,
   Flame,
   Grid3x3,
   Image as ImageIcon,
@@ -52,6 +53,7 @@ function GameIcon({ icon }: { icon: AdminArenaGame["icon"] }) {
   if (icon === "grid") return <Grid3x3 className="h-4 w-4" aria-hidden="true" />;
   if (icon === "image") return <ImageIcon className="h-4 w-4" aria-hidden="true" />;
   if (icon === "flame") return <Flame className="h-4 w-4" aria-hidden="true" />;
+  if (icon === "dice") return <Dices className="h-4 w-4" aria-hidden="true" />;
   return <Swords className="h-4 w-4" aria-hidden="true" />;
 }
 

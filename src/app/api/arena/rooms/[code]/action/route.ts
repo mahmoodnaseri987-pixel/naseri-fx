@@ -48,7 +48,21 @@ import {
   parsePicState,
   submitPicGuess,
 } from "@/lib/pic-engine";
-import { parseState, persistFireState } from "@/lib/arena-live";
+import {
+  LUDO_GAME_SLUG,
+  LUDO_MOVE_MS,
+} from "@/lib/ludo-shared";
+import {
+  createLudoState,
+  ludoApplyPass,
+  ludoApplyPlayerAction,
+  ludoEventTexts,
+  ludoTick,
+  maybeFinish,
+  parseLudoState,
+  rollDice,
+} from "@/lib/ludo-engine";
+import { parseState, persistFireState, persistLudoState, settleLudo } from "@/lib/arena-live";
 
 /** خواندن امن فرادادهٔ اتاق (مثل گروه سنی) از JSON خام state — قبل از شروع بازی */
 function safeStateMeta(raw: string): { ageGroup?: unknown } {
@@ -736,6 +750,182 @@ export async function POST(
     }
 
     /* leave / ready / again → منطق مشترک پایین اجرا می‌شود */
+  }
+
+  /* ================================================================
+     اکشن‌های اختصاصی «منچ» — تاس، حرکت مهره و تسویهٔ نتیجه
+     ================================================================ */
+  if (room.gameSlug === LUDO_GAME_SLUG) {
+    /* --- شروع مسابقه (میزبان، حداقل ۲ نفر و حداکثر ۴، همه آماده) --- */
+    if (type === "start") {
+      if (room.status !== "lobby") {
+        return NextResponse.json({ error: "conflict" }, { status: 409 });
+      }
+      if (room.hostId !== me.memberId) {
+        return NextResponse.json({ error: "not host" }, { status: 403 });
+      }
+      if (room.members.length < MIN_PLAYERS) {
+        return NextResponse.json({ error: "need players" }, { status: 409 });
+      }
+      if (!room.members.every((m) => m.isReady)) {
+        return NextResponse.json({ error: "not ready" }, { status: 409 });
+      }
+      const lState = createLudoState(
+        room.members.map((m) => ({ id: m.memberId, name: m.name })),
+      );
+      await db.$transaction([
+        db.room.update({
+          where: { id: room.id },
+          data: { status: "playing", state: JSON.stringify(lState) },
+        }),
+        db.roomMember.updateMany({
+          where: { roomId: room.id },
+          data: { isReady: false, fireInput: "{}" },
+        }),
+        db.chatMessage.create({
+          data: {
+            scope: room.code,
+            memberId: me.memberId,
+            name: me.name,
+            content: "مسابقهٔ منچ شروع شد — ورود مهره‌ها فقط با جفت‌شش؛ خانه‌های رنگی شروع امن هستند!",
+            kind: "system",
+          },
+        }),
+      ]);
+      return NextResponse.json({ ok: true });
+    }
+
+    /* --- پرتاب تاس / حرکت مهره / پاس — همه با تیک مهلت‌ها و گارد seq --- */
+    if (type === "ludo_roll" || type === "ludo_move" || type === "ludo_pass") {
+      if (room.status !== "playing") {
+        return NextResponse.json({ error: "conflict" }, { status: 409 });
+      }
+      const lState = parseLudoState(room.state);
+      if (!lState) return NextResponse.json({ error: "gone" }, { status: 404 });
+      const nowMs = Date.now();
+      const memberIds = new Set(room.members.map((m) => m.memberId));
+
+      /* اول مهلت‌های عقب‌افتاده (ربات‌ها و غایب‌ها) پردازش می‌شود */
+      const tick = ludoTick(lState, { now: nowMs, memberIds });
+      if (tick.mutated) {
+        const namesOf: Record<string, string> = {};
+        for (const m of room.members) namesOf[m.memberId] = m.name;
+        const persisted = await persistLudoState(room.id, lState);
+        try {
+          for (const content of ludoEventTexts(tick.events, namesOf)) {
+            await db.chatMessage.create({
+              data: { scope: room.code, memberId: "system", name: "منچ", content, kind: "system" },
+            });
+          }
+        } catch {
+          /* چت حیاتی نیست */
+        }
+        if (!persisted) {
+          return NextResponse.json({ error: "conflict" }, { status: 409 });
+        }
+      }
+      if (lState.result) {
+        const namesOf: Record<string, string> = {};
+        for (const m of room.members) namesOf[m.memberId] = m.name;
+        await settleLudo(room.id, lState, namesOf);
+        return NextResponse.json({ ok: true, settled: true });
+      }
+      if (lState.turnId !== me.memberId) {
+        return NextResponse.json({ error: "not-turn" }, { status: 403 });
+      }
+
+      if (type === "ludo_roll") {
+        if (lState.dice) {
+          return NextResponse.json({ error: "already-rolled" }, { status: 409 });
+        }
+        if (nowMs > lState.deadline + 2_500) {
+          return NextResponse.json({ error: "expired" }, { status: 409 });
+        }
+        lState.dice = rollDice();
+        lState.rolls += 1;
+        lState.seq += 1;
+        lState.deadline = nowMs + LUDO_MOVE_MS;
+        const okp = await persistLudoState(room.id, lState);
+        if (!okp) return NextResponse.json({ error: "conflict" }, { status: 409 });
+        return NextResponse.json({ ok: true, a: lState.dice.a, b: lState.dice.b });
+      }
+
+      if (type === "ludo_move") {
+        const piece = Number(body.piece);
+        if (!Number.isInteger(piece) || piece < 0 || piece > 3) {
+          return NextResponse.json({ error: "bad piece" }, { status: 400 });
+        }
+        const outcome = ludoApplyPlayerAction(lState, me.memberId, piece, nowMs);
+        if (!outcome.ok) {
+          return NextResponse.json({ error: outcome.reason ?? "illegal" }, { status: 409 });
+        }
+        const namesOf: Record<string, string> = {};
+        for (const m of room.members) namesOf[m.memberId] = m.name;
+        const persisted = await persistLudoState(room.id, lState);
+        try {
+          for (const content of ludoEventTexts(outcome.events, namesOf)) {
+            await db.chatMessage.create({
+              data: { scope: room.code, memberId: me.memberId, name: me.name, content, kind: "system" },
+            });
+          }
+        } catch {
+          /* چت حیاتی نیست */
+        }
+        if (!persisted) {
+          return NextResponse.json({ error: "conflict" }, { status: 409 });
+        }
+        if (outcome.settled && lState.result) {
+          await settleLudo(room.id, lState, namesOf);
+        }
+        return NextResponse.json({
+          ok: true,
+          captured: outcome.captured ?? null,
+          surprise: outcome.surprise ?? null,
+          extraRoll: outcome.extraRoll,
+          finished: Boolean(outcome.finishedPlayer),
+          settled: outcome.settled,
+        });
+      }
+
+      /* پاس — فقط وقتی هیچ حرکت مجازی نیست */
+      const outcome = ludoApplyPass(lState, me.memberId, nowMs);
+      if (!outcome.ok) {
+        return NextResponse.json({ error: outcome.reason ?? "illegal" }, { status: 409 });
+      }
+      const okp = await persistLudoState(room.id, lState);
+      if (!okp) return NextResponse.json({ error: "conflict" }, { status: 409 });
+      if (outcome.settled && lState.result) {
+        const namesOf: Record<string, string> = {};
+        for (const m of room.members) namesOf[m.memberId] = m.name;
+        await settleLudo(room.id, lState, namesOf);
+      }
+      return NextResponse.json({ ok: true });
+    }
+
+    /* --- خروج وسط مسابقه — مهره‌ها می‌مانند و قابل زدن هستند؛ نوبت از او حذف می‌شود --- */
+    if (type === "leave" && room.status === "playing") {
+      const lState = parseLudoState(room.state);
+      if (lState && !lState.result) {
+        lState.order = lState.order.filter((id) => id !== me.memberId);
+        lState.seq += 1;
+        if (lState.turnId === me.memberId) {
+          lState.turnId = lState.order[0] ?? "";
+          lState.dice = null;
+          lState.rolls = 0;
+          lState.deadline = Date.now() + 400;
+        }
+        maybeFinish(lState, Date.now());
+        await persistLudoState(room.id, lState);
+        if (lState.result) {
+          const namesOf: Record<string, string> = {};
+          for (const m of room.members) namesOf[m.memberId] = m.name;
+          await settleLudo(room.id, lState, namesOf);
+        }
+      }
+      /* ادامه با منطق عمومی حذف عضو در پایین */
+    }
+
+    /* ready / again → منطق مشترک پایین اجرا می‌شود */
   }
 
   /* --- پرکردن صندلی‌های خالی با ربات (میزبان، فقط لابی، فقط بازی‌های سؤالی) ---

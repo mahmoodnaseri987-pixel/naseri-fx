@@ -117,6 +117,77 @@ function noiseSource(c: AudioContext, seconds: number): AudioBufferSourceNode {
   return src;
 }
 
+/* ---------- افکت‌های منچ — ریختن تاس و زدن مهره ---------- */
+
+/** خش‌خش تاس — چند ضربهٔ کوتاه نویزی + کلیک‌های چوبی */
+export function sfxDice(): void {
+  const c = ensureCtx();
+  if (!c || !master || muted) return;
+  const t0 = c.currentTime + 0.02;
+  for (let i = 0; i < 5; i++) {
+    const at = t0 + i * (0.055 + i * 0.03);
+    const src = noiseSource(c, 0.05);
+    const bp = c.createBiquadFilter();
+    bp.type = "bandpass";
+    bp.frequency.value = 1700 + Math.random() * 1400;
+    bp.Q.value = 2.2;
+    const env = c.createGain();
+    env.gain.setValueAtTime(0.16, at);
+    env.gain.exponentialRampToValueAtTime(0.0002, at + 0.05);
+    src.connect(bp);
+    bp.connect(env);
+    env.connect(master);
+    src.start(at);
+    src.stop(at + 0.06);
+    tone(c, master, 320 + Math.random() * 260, at, 0.04, 0.09, "square");
+  }
+  /* فرود تاس */
+  tone(c, master, 190, t0 + 0.36, 0.12, 0.2, "triangle", 120);
+}
+
+/** زدن مهره — پرتاب به پایگاه با «زاپ» نزولی */
+export function sfxCapture(): void {
+  const c = ensureCtx();
+  if (!c || !master || muted) return;
+  const t0 = c.currentTime + 0.02;
+  tone(c, master, 880, t0, 0.16, 0.24, "sawtooth", 140);
+  tone(c, master, 1320, t0 + 0.02, 0.1, 0.14, "square", 220);
+  const src = noiseSource(c, 0.2);
+  const hp = c.createBiquadFilter();
+  hp.type = "highpass";
+  hp.frequency.value = 900;
+  const env = c.createGain();
+  env.gain.setValueAtTime(0.12, t0);
+  env.gain.exponentialRampToValueAtTime(0.0002, t0 + 0.22);
+  src.connect(hp);
+  hp.connect(env);
+  env.connect(master);
+  src.start(t0);
+  src.stop(t0 + 0.24);
+}
+
+/** پرش کوچک هر گام حرکت مهره */
+export function sfxHop(): void {
+  const c = ensureCtx();
+  if (!c || !master || muted) return;
+  const t0 = c.currentTime + 0.01;
+  tone(c, master, 520 + Math.random() * 180, t0, 0.07, 0.12, "sine", 760);
+}
+
+/** زنگ سورپرایز — دوتُن چرخشی مثبت یا منفی */
+export function sfxSurprise(good: boolean): void {
+  const c = ensureCtx();
+  if (!c || !master || muted) return;
+  const t0 = c.currentTime + 0.02;
+  if (good) {
+    tone(c, master, 660, t0, 0.12, 0.16, "sine");
+    tone(c, master, 990, t0 + 0.1, 0.16, 0.16, "sine");
+  } else {
+    tone(c, master, 620, t0, 0.14, 0.16, "triangle", 480);
+    tone(c, master, 430, t0 + 0.12, 0.18, 0.15, "triangle", 240);
+  }
+}
+
 /* ---------- موزیک ملایم پس‌زمینه ---------- */
 
 function scheduleChord(): void {

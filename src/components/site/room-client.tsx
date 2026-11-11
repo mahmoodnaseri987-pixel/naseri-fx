@@ -29,10 +29,12 @@ import { ChatPanel } from "@/components/site/chat-panel";
 import { NabardClient } from "@/components/site/nabard-client";
 import { JadvalClient } from "@/components/site/jadval-client";
 import { PicClient } from "@/components/site/pic-client";
+import { LudoClient } from "@/components/site/ludo-client";
 import { subscribeStream } from "@/lib/realtime";
 import { ARENA_GAME_SLUG, ANSWER_MS, BOT_GAMES, REVEAL_MS, CATEGORY_LABELS, isBotId, type ArenaCategory } from "@/lib/arena-game";
 import { JADVAL_GAME_SLUG } from "@/lib/jadval-shared";
 import { PIC_GAME_SLUG } from "@/lib/pic-shared";
+import { LUDO_GAME_SLUG } from "@/lib/ludo-shared";
 import { sfxAmbientStart, sfxAmbientStop, sfxIsMuted, sfxLose, sfxToggleMuted, sfxWin } from "@/lib/arena-sfx";
 import type { ArenaStateResponse } from "@/lib/types";
 
@@ -439,6 +441,36 @@ export function RoomClient({ code }: { code: string }) {
             {a.pic.lobbyHint}
           </p>
         )}
+        {st.room.gameSlug === LUDO_GAME_SLUG && (
+          <div className="mt-8 rounded-2xl border border-sky-500/30 bg-sky-500/[0.06] px-4 py-3.5">
+            <p className="flex items-center justify-center gap-2 text-center text-sm font-bold text-sky-200">
+              <span aria-hidden="true">🎲</span>
+              {a.ludo.rulesTitle}
+              <span aria-hidden="true">🎲</span>
+            </p>
+            <p className="mt-1.5 text-center text-[11px] font-semibold text-sky-300/80">{a.ludo.rulesShort}</p>
+            <ul className="mt-3 grid gap-1.5 text-xs leading-6 text-zinc-300 sm:grid-cols-2">
+              {[
+                a.ludo.rule1,
+                a.ludo.rule2,
+                a.ludo.rule3,
+                a.ludo.rule4,
+                a.ludo.rule5,
+                a.ludo.rule6,
+                a.ludo.rule7,
+                a.ludo.rule8,
+                a.ludo.rule9,
+                a.ludo.rule10,
+                a.ludo.rule11,
+              ].map((rule, i) => (
+                <li key={i} className="flex gap-2">
+                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-sky-400" aria-hidden="true" />
+                  <span>{rule}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         <section className="mt-6 h-[460px] overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/60">
           <ChatPanel scope={code} className="h-full" />
         </section>
@@ -527,6 +559,16 @@ export function RoomClient({ code }: { code: string }) {
   /* رقابت جدول — بازی تیمی با چت مخفی هر تیم (نتایج هم همین‌جا رندر می‌شود) */
   if (st.room.gameSlug === JADVAL_GAME_SLUG && st.jadval) {
     return <JadvalClient st={st} offsetMs={st.now - fetchedAt} />;
+  }
+
+  /* منچ — تختهٔ گروهی با تاس؛ نتایج هم داخل همان تخته رندر می‌شود */
+  if (st.room.gameSlug === LUDO_GAME_SLUG && st.ludo) {
+    return (
+      <>
+        {chatFloat}
+        <LudoClient st={st} sendAction={action} />
+      </>
+    );
   }
 
   /* نبرد دایره‌ها — بازی اکشن لحظه‌ای با شبیه‌سازی قطعی */

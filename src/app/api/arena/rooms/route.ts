@@ -11,12 +11,14 @@ import { ARENA_GAME_SLUG, MAX_PLAYERS, MIN_PLAYERS, normalizeAgeGroup, generateR
 import { NABARD_GAME_SLUG } from "@/lib/nabard-engine";
 import { JADVAL_GAME_SLUG } from "@/lib/jadval-shared";
 import { PIC_GAME_SLUG } from "@/lib/pic-shared";
+import { LUDO_GAME_SLUG } from "@/lib/ludo-shared";
+import { getArenaGameDef } from "@/lib/arena-registry";
 import { housekeeping } from "@/lib/arena-server";
 import { getArenaCatalog, isRoomGameEnabled } from "@/lib/arena-catalog";
 import type { ArenaRoomSummary } from "@/lib/types";
 
 /* «میدان آتش» آنلاین کنار گذاشته شد — نسخه آفلاین تک‌نفره در /fire سرو می‌شود */
-const GAME_SLUGS = new Set([ARENA_GAME_SLUG, NABARD_GAME_SLUG, JADVAL_GAME_SLUG, PIC_GAME_SLUG]);
+const GAME_SLUGS = new Set([ARENA_GAME_SLUG, NABARD_GAME_SLUG, JADVAL_GAME_SLUG, PIC_GAME_SLUG, LUDO_GAME_SLUG]);
 const MAX_ACTIVE_ROOMS = 30;
 
 export async function GET() {
@@ -77,12 +79,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "unknown game" }, { status: 400 });
   }
 
-  /* تعداد بازیکن دعوت‌شده — میزبان از ۲ تا ۱۰ انتخاب می‌کند (پیش‌فرض: ظرفیت کامل) */
+  /* تعداد بازیکن — محدود به بازهٔ مجاز خود بازی (منچ ۲ تا ۴، بقیه ۲ تا ۸) */
+  const def = getArenaGameDef(gameSlug);
+  const capMax = def?.maxPlayers ?? MAX_PLAYERS;
+  const capMin = Math.max(def?.minPlayers ?? MIN_PLAYERS, MIN_PLAYERS);
   const rawMax = Number(body.maxPlayers);
   const maxPlayers =
-    Number.isInteger(rawMax) && rawMax >= MIN_PLAYERS && rawMax <= MAX_PLAYERS
+    Number.isInteger(rawMax) && rawMax >= capMin && rawMax <= capMax
       ? rawMax
-      : MAX_PLAYERS;
+      : capMax;
 
   /* گروه سنی اتاق — سؤال‌ها (چالش سرعتی و جدول) متناسب با آن تنظیم می‌شوند؛
      انتخاب میزبان روی پروفایل خودش هم ذخیره می‌شود تا دفعه بعد پیش‌فرض باشد */

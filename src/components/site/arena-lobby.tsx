@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import {
   Camera,
   Crown,
+  Dices,
   Flame,
   Grid3x3,
   Image as ImageIcon,
@@ -31,6 +32,7 @@ import { ARENA_GAME_SLUG, AGE_GROUPS, MAX_PLAYERS, MIN_PLAYERS, type AgeGroup } 
 import { NABARD_GAME_SLUG } from "@/lib/nabard-engine";
 import { JADVAL_GAME_SLUG } from "@/lib/jadval-shared";
 import { PIC_GAME_SLUG } from "@/lib/pic-shared";
+import { LUDO_GAME_SLUG, LUDO_MAX_PLAYERS } from "@/lib/ludo-shared";
 import type { ArenaGameConfigView, ArenaRoomSummary, MemberInfo } from "@/lib/types";
 
 /* کارت ویژهٔ «میدان آتش آفلاین» که از پنل هم قابل حذف است */
@@ -40,7 +42,7 @@ type LobbyGame = {
   slug: string;
   title: string;
   desc: string;
-  icon: "swords" | "zap" | "grid" | "image";
+  icon: "swords" | "zap" | "grid" | "image" | "dice";
 };
 
 export function ArenaLobby({ member }: { member: MemberInfo }) {
@@ -58,6 +60,12 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
   const [gameSlug, setGameSlug] = useState<string>(ARENA_GAME_SLUG);
   const [playerCount, setPlayerCount] = useState<number>(MAX_PLAYERS);
   const [ageGroup, setAgeGroup] = useState<AgeGroup>("adult");
+
+  /* ظرفیت مجاز بازی انتخابی — منچ حداکثر ۴ نفر (چهار رنگ) */
+  const capacityMax = gameSlug === LUDO_GAME_SLUG ? LUDO_MAX_PLAYERS : MAX_PLAYERS;
+  useEffect(() => {
+    if (playerCount > capacityMax) setPlayerCount(capacityMax);
+  }, [capacityMax, playerCount]);
 
   const numFmt = useCallback(
     (n: number) => new Intl.NumberFormat(lang === "fa" ? "fa-IR" : "en-US").format(n),
@@ -179,6 +187,7 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
       { slug: NABARD_GAME_SLUG, title: a.gameNabard, desc: a.gameNabardDesc, icon: "zap" },
       { slug: JADVAL_GAME_SLUG, title: a.gameJadval, desc: a.gameJadvalDesc, icon: "grid" },
       { slug: PIC_GAME_SLUG, title: a.gamePic, desc: a.gamePicDesc, icon: "image" },
+      { slug: LUDO_GAME_SLUG, title: a.gameLudo, desc: a.gameLudoDesc, icon: "dice" },
     ];
     if (!gamesCfg) return all;
     const order = new Map(gamesCfg.map((g, i) => [g.slug, i]));
@@ -302,6 +311,8 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
                       <Grid3x3 className="h-4 w-4" aria-hidden="true" />
                     ) : g.icon === "image" ? (
                       <ImageIcon className="h-4 w-4" aria-hidden="true" />
+                    ) : g.icon === "dice" ? (
+                      <Dices className="h-4 w-4" aria-hidden="true" />
                     ) : (
                       <Swords className="h-4 w-4" aria-hidden="true" />
                     )}
@@ -317,7 +328,7 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
             <div className="mt-4">
               <p className="text-xs font-bold text-zinc-400">{a.playersLabel}</p>
               <div className="mt-2 flex flex-wrap gap-1.5">
-                {Array.from({ length: MAX_PLAYERS - MIN_PLAYERS + 1 }, (_, i) => MIN_PLAYERS + i).map(
+                {Array.from({ length: capacityMax - MIN_PLAYERS + 1 }, (_, i) => MIN_PLAYERS + i).map(
                   (n) => (
                     <button
                       key={n}
@@ -482,6 +493,11 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
                           {room.gameSlug === NABARD_GAME_SLUG && (
                             <span className="rounded-full bg-lime-500/10 px-2 py-0.5 text-[10px] font-bold text-lime-300">
                               {a.gameNabard}
+                            </span>
+                          )}
+                          {room.gameSlug === LUDO_GAME_SLUG && (
+                            <span className="rounded-full bg-sky-500/10 px-2 py-0.5 text-[10px] font-bold text-sky-300">
+                              {a.gameLudo}
                             </span>
                           )}
                           {room.gameSlug === ARENA_GAME_SLUG && (
