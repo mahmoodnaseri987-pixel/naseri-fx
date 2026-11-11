@@ -71,8 +71,8 @@ export const ARENA_CATALOG_DEFS: Omit<CatalogGame, "enabled" | "sortOrder">[] = 
     kind: "room",
     titleFa: "منچ گروهی",
     titleEn: "Ludo Party",
-    descFa: "منچ کلاسیک ۲ تا ۴ نفره — جفت‌شش، زدن مهره و ۵ خانهٔ سورپرایز",
-    descEn: "Classic Ludo for 2-4 — double six, captures, 5 surprise cells",
+    descFa: "منچ کلاسیک ۲ تا ۴ نفره — ورود با ۶، زدن مهره و ۵ خانهٔ سورپرایز",
+    descEn: "Classic Ludo for 2-4 — enter with a 6, captures, 5 surprise cells",
     icon: "dice",
   },
   {

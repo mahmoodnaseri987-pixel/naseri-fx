@@ -561,14 +561,10 @@ export function RoomClient({ code }: { code: string }) {
     return <JadvalClient st={st} offsetMs={st.now - fetchedAt} />;
   }
 
-  /* منچ — تختهٔ گروهی با تاس؛ نتایج هم داخل همان تخته رندر می‌شود */
+  /* منچ — تختهٔ گروهی با تاس؛ نتایج هم داخل همان تخته رندر می‌شود.
+     چت داخل خود بازی است (داشبورد کوچک) تا در تمام‌صفحه هم بماند */
   if (st.room.gameSlug === LUDO_GAME_SLUG && st.ludo) {
-    return (
-      <>
-        {chatFloat}
-        <LudoClient st={st} sendAction={action} />
-      </>
-    );
+    return <LudoClient st={st} sendAction={action} />;
   }
 
   /* نبرد دایره‌ها — بازی اکشن لحظه‌ای با شبیه‌سازی قطعی */

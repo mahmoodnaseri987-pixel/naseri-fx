@@ -2,12 +2,11 @@
    بازی گروهی «منچ» — اجزای مشترک کلاینت/سرور
    ================================================================
    صفحهٔ کلاسیک ۱۵×۱۵ با مسیر ۵۲ خانه‌ای و ستون خانه‌های خودی.
-   قوانین (مطابق انتخاب مالک سایت):
+   قوانین (مطابق انتخاب مالک سایت — نسخهٔ یک‌تاس):
      • هر بازیکن ۴ مهرهٔ هم‌رنگ دارد؛ همه اول در پایگاه‌اند.
-     • در هر نوبت دو تاس با هم پرتاب می‌شود و «جمع» آن‌ها حرکت است.
-     • ورود مهره به مسیر فقط با «جفت‌شش» (۶ و ۶) — ورود یعنی نشستن روی
-       خانهٔ شروعِ رنگ خود بازیکن؛ بعد از آن پرتاب دوباره هم دارد.
-     • آوردن هر ۶ → بعد از حرکت، پرتاب دوباره.
+     • در هر نوبت یک تاس پرتاب می‌شود و مهره به همان تعداد حرکت می‌کند.
+     • ورود مهره به مسیر فقط با آوردن ۶ — ورود یعنی نشستن روی
+       خانهٔ شروعِ رنگ خود بازیکن؛ آوردن ۶ پرتاب دوباره هم می‌دهد.
      • فرود روی مهرهٔ حریف (در خانهٔ غیرامن) = زدن؛ مهره به پایگاه برمی‌گردد.
      • خانهٔ شروعِ هر رنگ «خانهٔ امن» است: هیچ مهرهٔ دیگر آن‌جا زده نمی‌شود
        و اگر آن خانه با مهرهٔ صاحبش پر باشد، حرکت حریف به آن انجام نمی‌شود.
@@ -144,7 +143,7 @@ export const LUDO_SURPRISE_LABEL: Record<LudoSurpriseKind, string> = {
 
 /* ---------- وضعیت مسابقه ---------- */
 
-export type LudoDice = { a: number; b: number };
+export type LudoDice = { v: number }; // یک تاس — عدد ۱ تا ۶
 
 export type LudoPlayerInfo = {
   id: string;
@@ -204,7 +203,7 @@ export function ludoActionsFor(args: {
   const { me, colorOf, pieces, dice, surprise } = args;
   const myColor = colorOf[me];
   if (myColor === undefined || !dice) return [];
-  const sum = dice.a + dice.b;
+  const sum = dice.v;
   const mine = pieces[me] ?? [];
   const out: LudoAction[] = [];
   const others = Object.keys(pieces).filter((id) => id !== me);
@@ -244,8 +243,8 @@ export function ludoActionsFor(args: {
     return best?.id ?? null;
   };
 
-  /* ورود با جفت‌شش — فقط وقتی خانهٔ شروع خودمان با مهرهٔ خودمان پر نشده */
-  if (dice.a === 6 && dice.b === 6) {
+  /* ورود با ۶ — فقط وقتی خانهٔ شروع خودمان با مهرهٔ خودمان پر نشده */
+  if (dice.v === 6) {
     const hasInBase = mine.some((s) => s < 0);
     if (hasInBase) {
       const abs = LUDO_START_ABS[myColor];

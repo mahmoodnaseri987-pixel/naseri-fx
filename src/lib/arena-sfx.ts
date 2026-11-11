@@ -117,61 +117,133 @@ function noiseSource(c: AudioContext, seconds: number): AudioBufferSourceNode {
   return src;
 }
 
-/* ---------- افکت‌های منچ — ریختن تاس و زدن مهره ---------- */
+/* ---------- افکت‌های منچ — تاس روی تختهٔ چوبی، قدم، زدن و پیروزی ---------- */
 
-/** خش‌خش تاس — چند ضربهٔ کوتاه نویزی + کلیک‌های چوبی */
+/** یک «تِکِ» چوبی — بدنهٔ تشدید چوب + ترانزینت نویز کوتاه */
+function woodKnock(
+  c: AudioContext,
+  out: AudioNode,
+  at: number,
+  bodyHz: number,
+  gain: number,
+  pan: number,
+): void {
+  /* پن استریو — با fallback برای مرورگرهای قدیمی */
+  let p: AudioNode = out;
+  if (typeof c.createStereoPanner === "function") {
+    const sp = c.createStereoPanner();
+    sp.pan.value = pan;
+    sp.connect(out);
+    p = sp;
+  }
+  /* بدنهٔ چوب — دو تشدید ناهارمونیک میرا */
+  for (const [f, g, d] of [
+    [bodyHz, 1, 0.075],
+    [bodyHz * 2.63, 0.36, 0.045],
+  ] as [number, number, number][]) {
+    const o = c.createOscillator();
+    o.type = "sine";
+    o.frequency.setValueAtTime(f * (1 + (Math.random() - 0.5) * 0.04), at);
+    const env = c.createGain();
+    env.gain.setValueAtTime(gain * g * 0.9, at);
+    env.gain.exponentialRampToValueAtTime(0.0002, at + d);
+    o.connect(env);
+    env.connect(p);
+    o.start(at);
+    o.stop(at + d + 0.02);
+  }
+  /* ترانزینت نویز — تیزی برخورد */
+  const src = noiseSource(c, 0.04);
+  const bp = c.createBiquadFilter();
+  bp.type = "bandpass";
+  bp.frequency.value = 1400 + Math.random() * 1800;
+  bp.Q.value = 1.1;
+  const env = c.createGain();
+  env.gain.setValueAtTime(gain * 0.5, at);
+  env.gain.exponentialRampToValueAtTime(0.0002, at + 0.035);
+  src.connect(bp);
+  bp.connect(env);
+  env.connect(p);
+  src.start(at);
+  src.stop(at + 0.05);
+}
+
+/** ریختن تاس روی تختهٔ چوبی — چند ضربهٔ خوشه‌ای با انرژی کاهنده و فرود نهایی */
 export function sfxDice(): void {
   const c = ensureCtx();
   if (!c || !master || muted) return;
   const t0 = c.currentTime + 0.02;
-  for (let i = 0; i < 5; i++) {
-    const at = t0 + i * (0.055 + i * 0.03);
-    const src = noiseSource(c, 0.05);
-    const bp = c.createBiquadFilter();
-    bp.type = "bandpass";
-    bp.frequency.value = 1700 + Math.random() * 1400;
-    bp.Q.value = 2.2;
-    const env = c.createGain();
-    env.gain.setValueAtTime(0.16, at);
-    env.gain.exponentialRampToValueAtTime(0.0002, at + 0.05);
-    src.connect(bp);
-    bp.connect(env);
-    env.connect(master);
-    src.start(at);
-    src.stop(at + 0.06);
-    tone(c, master, 320 + Math.random() * 260, at, 0.04, 0.09, "square");
+  /* خوشهٔ غلتیدن — فاصله‌ها بزرگ‌تر می‌شوند و صدا آرام‌تر */
+  let t = t0;
+  for (let i = 0; i < 6; i++) {
+    const gap = 0.045 + i * 0.028 + Math.random() * 0.03;
+    woodKnock(c, master, t, 150 + Math.random() * 110, 0.2 - i * 0.022, (i % 2 ? 1 : -1) * 0.22);
+    t += gap;
   }
-  /* فرود تاس */
-  tone(c, master, 190, t0 + 0.36, 0.12, 0.2, "triangle", 120);
+  /* فرود و لرزش نهایی */
+  woodKnock(c, master, t + 0.04, 175, 0.24, 0);
+  woodKnock(c, master, t + 0.14, 140, 0.1, 0.1);
 }
 
-/** زدن مهره — پرتاب به پایگاه با «زاپ» نزولی */
-export function sfxCapture(): void {
-  const c = ensureCtx();
-  if (!c || !master || muted) return;
-  const t0 = c.currentTime + 0.02;
-  tone(c, master, 880, t0, 0.16, 0.24, "sawtooth", 140);
-  tone(c, master, 1320, t0 + 0.02, 0.1, 0.14, "square", 220);
-  const src = noiseSource(c, 0.2);
-  const hp = c.createBiquadFilter();
-  hp.type = "highpass";
-  hp.frequency.value = 900;
-  const env = c.createGain();
-  env.gain.setValueAtTime(0.12, t0);
-  env.gain.exponentialRampToValueAtTime(0.0002, t0 + 0.22);
-  src.connect(hp);
-  hp.connect(env);
-  env.connect(master);
-  src.start(t0);
-  src.stop(t0 + 0.24);
-}
-
-/** پرش کوچک هر گام حرکت مهره */
+/** صدای قدم — مهره هر خانه را با یک قدمِ چوبی نرم رد می‌کند */
 export function sfxHop(): void {
   const c = ensureCtx();
   if (!c || !master || muted) return;
   const t0 = c.currentTime + 0.01;
-  tone(c, master, 520 + Math.random() * 180, t0, 0.07, 0.12, "sine", 760);
+  woodKnock(c, master, t0, 165 + Math.random() * 50, 0.09, (Math.random() - 0.5) * 0.3);
+}
+
+/** زدن مهره — برخورد چوبی + «زاپ» نزولی + باد کوتاه */
+export function sfxCapture(): void {
+  const c = ensureCtx();
+  if (!c || !master || muted) return;
+  const t0 = c.currentTime + 0.02;
+  woodKnock(c, master, t0, 130, 0.3, 0);
+  tone(c, master, 760, t0 + 0.02, 0.18, 0.2, "sawtooth", 130);
+  const src = noiseSource(c, 0.22);
+  const bp = c.createBiquadFilter();
+  bp.type = "bandpass";
+  bp.frequency.setValueAtTime(1600, t0);
+  bp.frequency.exponentialRampToValueAtTime(420, t0 + 0.2);
+  bp.Q.value = 0.9;
+  const env = c.createGain();
+  env.gain.setValueAtTime(0.14, t0);
+  env.gain.exponentialRampToValueAtTime(0.0002, t0 + 0.24);
+  src.connect(bp);
+  bp.connect(env);
+  env.connect(master);
+  src.start(t0);
+  src.stop(t0 + 0.26);
+}
+
+/** «دینگ» آوردن ۶ — زنگ روشن و شفاف */
+export function sfxDing(): void {
+  const c = ensureCtx();
+  if (!c || !master || muted) return;
+  const t0 = c.currentTime + 0.02;
+  tone(c, master, 1567.98, t0, 0.5, 0.16, "sine");
+  tone(c, master, 2349.32, t0 + 0.005, 0.3, 0.06, "sine");
+  tone(c, master, 783.99, t0 + 0.005, 0.4, 0.05, "sine");
+}
+
+/** رسیدن مهره به خانه — آرپژ کوتاه درخشان */
+export function sfxHome(): void {
+  const c = ensureCtx();
+  if (!c || !master || muted) return;
+  const out: AudioNode = master;
+  const t0 = c.currentTime + 0.02;
+  [659.25, 880.0, 1318.51].forEach((f, i) => tone(c, out, f, t0 + i * 0.09, 0.3, 0.12, "sine"));
+  tone(c, out, 329.63, t0, 0.35, 0.06, "triangle");
+}
+
+/** اتمام کار یک بازیکن — فانفار کوتاه سه‌نتی */
+export function sfxFinisher(): void {
+  const c = ensureCtx();
+  if (!c || !master || muted) return;
+  const out: AudioNode = master;
+  const t0 = c.currentTime + 0.02;
+  [523.25, 659.25, 783.99].forEach((f, i) => tone(c, out, f, t0 + i * 0.13, 0.22, 0.13, "triangle"));
+  tone(c, out, 1046.5, t0 + 0.4, 0.5, 0.12, "triangle");
 }
 
 /** زنگ سورپرایز — دوتُن چرخشی مثبت یا منفی */

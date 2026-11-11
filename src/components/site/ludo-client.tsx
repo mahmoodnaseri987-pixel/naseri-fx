@@ -19,6 +19,7 @@ import {
   Crown,
   HelpCircle,
   Maximize2,
+  MessageCircle,
   Minimize2,
   Play,
   Trophy,
@@ -27,6 +28,7 @@ import {
   X,
 } from "lucide-react";
 import { useLang } from "@/components/site/language-provider";
+import { ChatPanel } from "@/components/site/chat-panel";
 import {
   LUDO_BASE_ANCHORS,
   LUDO_COLUMN,
@@ -42,11 +44,31 @@ import {
   type LudoColor,
   type LudoSurpriseKind,
 } from "@/lib/ludo-shared";
-import { sfxCapture, sfxDice, sfxIsMuted, sfxSurprise, sfxToggleMuted, sfxWin, sfxLose } from "@/lib/arena-sfx";
+import {
+  sfxCapture,
+  sfxDing,
+  sfxDice,
+  sfxFinisher,
+  sfxHome,
+  sfxHop,
+  sfxIsMuted,
+  sfxSurprise,
+  sfxToggleMuted,
+  sfxWin,
+  sfxLose,
+} from "@/lib/arena-sfx";
 import type { ArenaStateResponse } from "@/lib/types";
 
 const CELL = 40;
 const BOARD = CELL * 15;
+
+/** جای نشان صاحب پایگاه — روی نوار بیرونی هر پایگاه (درصد اندازهٔ تخته) */
+const LUDO_AVATAR_POS: Record<LudoColor, [number, number]> = {
+  0: [20, 4.3], // قرمز — بالا-چپ
+  1: [80, 4.3], // سبز — بالا-راست
+  2: [80, 95.7], // زرد — پایین-راست
+  3: [20, 95.7], // آبی — پایین-چپ
+};
 
 type XY = [number, number];
 
@@ -94,35 +116,33 @@ const PIP_MAP: Record<number, readonly [number, number][]> = {
   6: [[-1, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [1, 1]],
 };
 
-function Die({ v, rolling }: { v: number; rolling: boolean }) {
-  const [shown, setShown] = useState(v);
-  useEffect(() => {
-    if (!rolling) {
-      setShown(v);
-      return;
-    }
-    const id = setInterval(() => {
-      setShown(1 + Math.floor(Math.random() * 6));
-    }, 85);
-    return () => clearInterval(id);
-  }, [rolling, v]);
+/** چرخش مکعب برای نمایش هر وجه در جلو */
+const DIE_FACE_ROTATION: Record<number, string> = {
+  1: "rotateX(0deg) rotateY(0deg)",
+  2: "rotateX(-90deg) rotateY(0deg)",
+  3: "rotateX(0deg) rotateY(-90deg)",
+  4: "rotateX(0deg) rotateY(90deg)",
+  5: "rotateX(90deg) rotateY(0deg)",
+  6: "rotateX(0deg) rotateY(180deg)",
+};
+
+/** تاس سه‌بعدی CSS — چرخش نرم هنگام پرتاب، فرود روی عدد واقعی سرور */
+function Die3D({ v, rolling }: { v: number; rolling: boolean }) {
   return (
-    <svg viewBox="0 0 44 44" className={`h-11 w-11 sm:h-12 sm:w-12 ${rolling ? "ludo-shake" : ""}`} aria-hidden="true">
-      <defs>
-        <linearGradient id="ludoDie" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#fffdf5" />
-          <stop offset="0.55" stopColor="#f7efdc" />
-          <stop offset="1" stopColor="#e7d8b4" />
-        </linearGradient>
-      </defs>
-      <rect x="2" y="2" width="40" height="40" rx="10" fill="url(#ludoDie)" stroke="#c7b68c" strokeWidth="1.5" />
-      <rect x="4.5" y="4.5" width="35" height="26" rx="8" fill="#ffffff" opacity="0.5" />
-      <g fill="#33270f">
-        {PIP_MAP[shown]?.map(([px, py], i) => (
-          <circle key={i} cx={22 + px * 8} cy={22 + py * 8} r="3.6" />
+    <div className="ludo-die-scene" aria-hidden="true">
+      <div
+        className={`ludo-die ${rolling ? "ludo-die-rolling" : ""}`}
+        style={rolling ? undefined : { transform: DIE_FACE_ROTATION[v] }}
+      >
+        {([1, 2, 3, 4, 5, 6] as const).map((f) => (
+          <div key={f} className={`ludo-die-face ludo-die-face-${f}`}>
+            {PIP_MAP[f]?.map(([px, py], i) => (
+              <span key={i} className="ludo-pip" style={{ left: `${50 + px * 27}%`, top: `${50 + py * 27}%` }} />
+            ))}
+          </div>
         ))}
-      </g>
-    </svg>
+      </div>
+    </div>
   );
 }
 
@@ -159,6 +179,28 @@ export function LudoClient({
   const prevStepsRef = useRef<Record<string, number[]>>({});
   const animToken = useRef(0);
   const [flash, setFlash] = useState<{ key: string; color: string; at: number } | null>(null);
+
+  /* رد رنگی — خانه‌ها با عبور/فرود مهره به رنگ همان مهره در می‌آیند */
+  type Tint = { id: number; col: number; row: number; color: string; strong: boolean };
+  const [tints, setTints] = useState<Tint[]>([]);
+  const tintIdRef = useRef(0);
+  const addTint = useCallback((col: number, row: number, color: string, strong: boolean) => {
+    if (col < 0 || col > 14 || row < 0 || row > 14) return;
+    const id = ++tintIdRef.current;
+    setTints((ts) => [...ts.slice(-16), { id, col, row, color, strong }]);
+    window.setTimeout(() => setTints((ts) => ts.filter((t) => t.id !== id)), strong ? 2400 : 760);
+  }, []);
+
+  /* درخشش خانهٔ پایانی وسط تخته + لرزش تخته هنگام زدن مهره */
+  const [homeBurst, setHomeBurst] = useState(0);
+  const boardRef = useRef<HTMLDivElement>(null);
+  const shakeBoard = useCallback(() => {
+    const el = boardRef.current;
+    if (!el) return;
+    el.classList.remove("ludo-board-shake");
+    void el.offsetWidth;
+    el.classList.add("ludo-board-shake");
+  }, []);
 
   const computeTargets = useCallback(
     (pieces: Record<string, number[]>, colors: Record<string, LudoColor>) => {
@@ -203,7 +245,8 @@ export function LudoClient({
     /* تشخیص رخدادها برای صدا و فلش */
     let captured = false;
     let surpriseGood: boolean | null = null;
-    const diceSum = l.dice ? l.dice.a + l.dice.b : null;
+    let homeHit = false;
+    const diceV = l.dice ? l.dice.v : null;
     for (const [pid, steps] of Object.entries(l.pieces)) {
       const color = colorOf[pid];
       if (color === undefined) continue;
@@ -219,18 +262,38 @@ export function LudoClient({
             setFlash({ key: `${c}-${r}`, color: "#ef4444", at: Date.now() });
           }
         }
-        if (b >= 0 && s >= 0 && diceSum !== null) {
-          const normal = s > b ? b + diceSum : b - diceSum;
+        if (b >= 0 && s >= 0 && diceV !== null) {
+          const normal = s > b ? b + diceV : b - diceV;
           const bounced = normal > LUDO_HOME_STEP ? 2 * LUDO_HOME_STEP - normal : normal;
           if (s !== bounced) surpriseGood = s > b;
         }
+        if (s === LUDO_HOME_STEP && b !== LUDO_HOME_STEP) homeHit = true;
+        /* رنگ‌شدن خانهٔ فرود به رنگ مهره */
+        if (s >= 0 && s < LUDO_HOME_STEP) {
+          const cell =
+            s >= LUDO_COLUMN_START
+              ? LUDO_COLUMN[color][s - LUDO_COLUMN_START]
+              : (() => {
+                  const abs = ludoAbsCellOf(color, s);
+                  return abs !== null ? LUDO_TRACK[abs] : null;
+                })();
+          if (cell) addTint(cell[0], cell[1], LUDO_COLOR_INFO[color].base, true);
+        }
       });
     }
-    if (captured) sfxCapture();
+    if (captured) {
+      sfxCapture();
+      shakeBoard();
+    }
     if (surpriseGood !== null) sfxSurprise(surpriseGood);
+    if (homeHit) {
+      sfxHome();
+      setHomeBurst(Date.now());
+    }
 
-    /* زنجیرهٔ گام‌ها برای هر مهرهٔ تغییرکرده */
-    const chains: Record<string, XY[]> = {};
+    /* زنجیرهٔ گام‌ها برای هر مهرهٔ تغییرکرده — هر گام پرچم «قدم واقعی» دارد */
+    type ChainStep = { p: XY; hop: boolean; color?: LudoColor };
+    const chains: Record<string, ChainStep[]> = {};
     for (const [pid, steps] of Object.entries(l.pieces)) {
       const color = colorOf[pid];
       if (color === undefined) continue;
@@ -243,20 +306,20 @@ export function LudoClient({
         const to = targets[key];
         if (s === -1 || b === -1) {
           /* ورود یا زده‌شدن — پرتاب مستقیم در ۴ نقطه */
-          chains[key] = [0.33, 0.66].map((t) => lerp(from, to, t));
-          chains[key].push(to);
+          chains[key] = [0.33, 0.66].map((t) => ({ p: lerp(from, to, t), hop: false }));
+          chains[key].push({ p: to, hop: false });
         } else {
-          const sum = diceSum ?? Math.abs(s - b);
-          const chain: XY[] = [];
+          const sum = diceV ?? Math.abs(s - b);
+          const chain: ChainStep[] = [];
           for (let k = 1; k <= sum; k++) {
             let h = b + k;
             if (h > LUDO_HOME_STEP) h = 2 * LUDO_HOME_STEP - h;
-            chain.push(stepPoint(color, Math.max(-1, h), i));
+            chain.push({ p: stepPoint(color, Math.max(-1, h), i), hop: h < LUDO_HOME_STEP, color });
           }
           if (chain.length === 0 || Math.abs(s - b) !== sum) {
             /* سورپرایز مسیر را عوض کرده — دو گام مستقیم تا مقصد نهایی */
-            const last = chain[chain.length - 1] ?? from;
-            chains[key] = [...chain, lerp(last, to, 0.5), to];
+            const last = chain[chain.length - 1]?.p ?? from;
+            chains[key] = [...chain, { p: lerp(last, to, 0.5), hop: false }, { p: to, hop: false }];
           } else {
             chains[key] = chain;
           }
@@ -271,23 +334,31 @@ export function LudoClient({
       for (let step = 0; step < 14; step++) {
         if (animToken.current !== myToken) return;
         let moved = false;
+        let anyHop = false;
         for (const key of keys) {
           const nxt = chains[key]?.[step];
           if (nxt) {
-            cur[key] = nxt;
+            cur[key] = nxt.p;
             moved = true;
+            if (nxt.hop && nxt.color !== undefined) {
+              anyHop = true;
+              const col = Math.round(nxt.p[0] / CELL - 0.5);
+              const row = Math.round(nxt.p[1] / CELL - 0.5);
+              addTint(col, row, LUDO_COLOR_INFO[nxt.color].base, false);
+            }
           }
         }
         if (!moved) break;
         posRef.current = { ...cur };
         forceRender((x) => x + 1);
-        await new Promise((r) => setTimeout(r, 140));
+        if (anyHop) sfxHop(); // صدای قدم در هر خانه
+        await new Promise((r) => setTimeout(r, 205));
       }
       if (animToken.current !== myToken) return;
       posRef.current = { ...posRef.current, ...targets };
       forceRender((x) => x + 1);
     })();
-  }, [l.seq, l.pieces, l.dice, colorOf, computeTargets]);
+  }, [l.seq, l.pieces, l.dice, colorOf, computeTargets, addTint, shakeBoard]);
 
   /* ---------- قوانین: اکشن‌های مجاز من ---------- */
   const myColor = colorOf[me];
@@ -310,24 +381,42 @@ export function LudoClient({
     }
   }, [myTurn, l.dice, legal.length, l.finished, l.seq, sendAction]);
 
-  /* ---------- صدا: تاس، برد و باخت ---------- */
+  /* ---------- صدا: تاس چوبی، دینگ ۶، اتمام بازیکن، برد و باخت ---------- */
   const rollingRef = useRef(false);
   const [rolling, setRolling] = useState(false);
-  const diceKey = l.dice ? `${l.dice.a}-${l.dice.b}-${l.seq}` : "";
+  const clickRollRef = useRef(false); // پرتابِ دستی خودم — صدای تاس در کلیک پخش شده
+  const diceKey = l.dice ? `${l.dice.v}-${l.seq}` : "";
   const lastDiceKey = useRef("");
   useEffect(() => {
-    if (!diceKey) return;
-    if (rollingRef.current) {
+    if (!diceKey || lastDiceKey.current === diceKey) return;
+    lastDiceKey.current = diceKey;
+    const v = l.dice?.v ?? 0;
+    /* چرخش کوتاه تاس تا فرود روی عدد سرور */
+    if (!rollingRef.current) {
+      rollingRef.current = true;
+      setRolling(true);
+    }
+    if (!clickRollRef.current) sfxDice();
+    clickRollRef.current = false;
+    window.setTimeout(() => {
       rollingRef.current = false;
       setRolling(false);
-      lastDiceKey.current = diceKey;
-      return;
-    }
-    if (lastDiceKey.current !== diceKey) {
-      lastDiceKey.current = diceKey;
-      sfxDice();
-    }
+      if (v === 6) window.setTimeout(() => sfxDing(), 300); // دینگ آوردن ۶
+    }, 900);
   }, [diceKey]);
+
+  /* اتمام کار یک بازیکن — فانفار کوتاه */
+  const finisherRef = useRef("");
+  useEffect(() => {
+    const done = l.players
+      .filter((p) => p.finished)
+      .map((p) => p.id)
+      .sort()
+      .join(",");
+    if (!done || finisherRef.current === done) return;
+    finisherRef.current = done;
+    if (!l.finished) sfxFinisher();
+  }, [l.players, l.finished]);
 
   const finishedRef = useRef("");
   useEffect(() => {
@@ -344,19 +433,23 @@ export function LudoClient({
   const roll = useCallback(async () => {
     if (!myTurn || l.dice || rollingRef.current || l.finished) return;
     rollingRef.current = true;
+    clickRollRef.current = true;
     setRolling(true);
     sfxDice();
     const ok = await sendAction({ type: "ludo_roll" });
     if (!ok) {
       rollingRef.current = false;
+      clickRollRef.current = false;
       setRolling(false);
+      return;
     }
-    setTimeout(() => {
+    /* پشتیبان — اگر پاسخ سرور گم شد، چرخش متوقف شود */
+    window.setTimeout(() => {
       if (rollingRef.current) {
         rollingRef.current = false;
         setRolling(false);
       }
-    }, 1600);
+    }, 2600);
   }, [myTurn, l.dice, l.finished, sendAction]);
 
   const [shakeKey, setShakeKey] = useState<string | null>(null);
@@ -402,6 +495,8 @@ export function LudoClient({
 
   /* ---------- قوانین ---------- */
   const [rulesOpen, setRulesOpen] = useState(false);
+  /* داشبورد چت داخل بازی */
+  const [chatOpen, setChatOpen] = useState(false);
   const autoRules = useRef(false);
   useEffect(() => {
     if (!autoRules.current && countdown > 0 && countdown < LUDO_RULES_AUTO_MS) {
@@ -492,7 +587,7 @@ export function LudoClient({
       }
     >
       <style>{`
-        .ludo-piece { transition: transform 145ms linear; will-change: transform; }
+        .ludo-piece { transition: transform 205ms cubic-bezier(.34,1.35,.5,1); will-change: transform; }
         .ludo-pulse { transform-box: fill-box; transform-origin: center; animation: ludoPulse 1.15s ease-in-out infinite; }
         @keyframes ludoPulse { 0%,100% { transform: scale(1); opacity: .35 } 50% { transform: scale(1.28); opacity: .95 } }
         .ludo-shake { animation: ludoShake .5s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
@@ -507,6 +602,24 @@ export function LudoClient({
         @keyframes ludoCta { 0%,100% { transform: scale(1); } 50% { transform: scale(1.08); } }
         .ludo-confetti { animation: ludoConf linear forwards; }
         @keyframes ludoConf { 0% { transform: translateY(-10vh) rotate(0deg); opacity: 1 } 100% { transform: translateY(105vh) rotate(720deg); opacity: .7 } }
+        .ludo-tint { animation: ludoTint .75s ease-out forwards; transform-box: fill-box; transform-origin: center; }
+        @keyframes ludoTint { 0% { opacity: .5 } 100% { opacity: 0 } }
+        @keyframes ludoTintStrong { 0% { opacity: .7; transform: scale(.72) } 30% { opacity: .5; transform: scale(1.04) } 100% { opacity: 0; transform: scale(1.14) } }
+        .ludo-board-shake { animation: ludoBoardShake .42s ease-in-out; }
+        @keyframes ludoBoardShake { 0%,100% { transform: translate(0,0) rotate(0deg) } 22% { transform: translate(-5px,2px) rotate(-.45deg) } 48% { transform: translate(4px,-2px) rotate(.35deg) } 72% { transform: translate(-2px,1px) } }
+        .ludo-die-scene { width: 64px; height: 64px; perspective: 480px; }
+        @media (max-width: 639px) { .ludo-die-scene { transform: scale(.84); margin: -7px; } }
+        .ludo-die { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; transition: transform .5s cubic-bezier(.25,.8,.35,1.12); }
+        .ludo-die-rolling { animation: ludoTumble .82s cubic-bezier(.32,.44,.58,1) infinite; }
+        @keyframes ludoTumble { 0% { transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg) } 100% { transform: rotateX(720deg) rotateY(960deg) rotateZ(200deg) } }
+        .ludo-die-face { position: absolute; inset: 0; border-radius: 14px; background: linear-gradient(150deg,#fffef8 0%,#f6ecd2 55%,#e4d3aa 100%); border: 1px solid #c9b78d; box-shadow: inset 0 0 12px rgba(255,255,255,.8), inset 0 -3px 8px rgba(176,146,86,.4); }
+        .ludo-die-face-1 { transform: translateZ(32px) }
+        .ludo-die-face-6 { transform: rotateY(180deg) translateZ(32px) }
+        .ludo-die-face-3 { transform: rotateY(90deg) translateZ(32px) }
+        .ludo-die-face-4 { transform: rotateY(-90deg) translateZ(32px) }
+        .ludo-die-face-2 { transform: rotateX(90deg) translateZ(32px) }
+        .ludo-die-face-5 { transform: rotateX(-90deg) translateZ(32px) }
+        .ludo-pip { position: absolute; width: 16%; height: 16%; border-radius: 9999px; background: radial-gradient(circle at 34% 30%, #5a4620, #1f1503 72%); transform: translate(-50%,-50%); box-shadow: inset 0 1px 2px rgba(255,255,255,.4) }
       `}</style>
 
       <div
@@ -574,7 +687,7 @@ export function LudoClient({
         </div>
 
         {/* ---------- تخته ---------- */}
-        <div className="relative w-full" style={{ width: fs ? "min(100%, calc(100dvh - 210px))" : "min(100%, 560px)" }}>
+        <div ref={boardRef} className="relative w-full" style={{ width: fs ? "min(100%, calc(100dvh - 210px))" : "min(100%, 560px)" }}>
           <svg viewBox={`0 0 ${BOARD} ${BOARD}`} className="h-auto w-full select-none rounded-2xl shadow-2xl" role="img">
             <defs>
               <linearGradient id="ludoFrame" x1="0" y1="0" x2="1" y2="1">
@@ -725,6 +838,21 @@ export function LudoClient({
               }),
             )}
 
+            {/* رد رنگی — خانه‌ها با عبور/فرود مهره به رنگ او در می‌آیند */}
+            {tints.map((t) => (
+              <rect
+                key={`t${t.id}`}
+                x={t.col * CELL + 2}
+                y={t.row * CELL + 2}
+                width={CELL - 4}
+                height={CELL - 4}
+                rx="9"
+                fill={t.color}
+                className="ludo-tint"
+                style={t.strong ? { animationName: "ludoTintStrong", animationDuration: "2.2s" } : undefined}
+              />
+            ))}
+
             {/* خانهٔ مرکزی — چهار مثلث */}
             <g stroke="#fffdf4" strokeWidth="2" strokeLinejoin="round">
               <polygon points="240,240 240,360 300,300" fill={LUDO_COLOR_INFO[0].base} opacity="0.95" />
@@ -732,6 +860,14 @@ export function LudoClient({
               <polygon points="360,240 360,360 300,300" fill={LUDO_COLOR_INFO[2].base} opacity="0.95" />
               <polygon points="240,360 360,360 300,300" fill={LUDO_COLOR_INFO[3].base} opacity="0.95" />
             </g>
+
+            {/* درخشش رسیدن مهره به خانه */}
+            {homeBurst > 0 && (
+              <g key={`hb${homeBurst}`} className="ludo-flash" style={{ transformOrigin: "300px 300px" }}>
+                <circle cx="300" cy="300" r="24" fill="none" stroke="#fbbf24" strokeWidth="3" />
+                <circle cx="300" cy="300" r="13" fill="#fde68a" />
+              </g>
+            )}
 
             {/* مهره‌ها */}
             {pieceNodes.map((n) => {
@@ -761,6 +897,56 @@ export function LudoClient({
               );
             })}
           </svg>
+
+          {/* آواتار صاحب هر رنگ — گوشهٔ پایگاه خودش */}
+          <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+            {l.players.map((p) => {
+              const pos = LUDO_AVATAR_POS[p.color];
+              const info = LUDO_COLOR_INFO[p.color];
+              const isTurn = p.id === l.turnId && !l.finished;
+              return (
+                <div
+                  key={`av${p.id}`}
+                  className="absolute aspect-square -translate-x-1/2 -translate-y-1/2"
+                  style={{
+                    left: `${pos[0]}%`,
+                    top: `${pos[1]}%`,
+                    width: "7.4%",
+                    filter: isTurn ? "drop-shadow(0 0 6px rgba(251,191,36,.9))" : undefined,
+                  }}
+                >
+                  <div
+                    className="relative h-full w-full overflow-hidden rounded-full border-2"
+                    style={{ borderColor: isTurn ? "#fbbf24" : info.dark, background: info.light }}
+                  >
+                    <svg viewBox="0 0 40 40" className="absolute inset-0 h-full w-full" aria-hidden="true">
+                      <circle cx="20" cy="14" r="7.5" fill={info.base} />
+                      <path d="M9 34c0-7 4.6-11 11-11s11 4 11 11z" fill={info.base} />
+                    </svg>
+                    {p.bot ? (
+                      <svg viewBox="0 0 40 40" className="absolute inset-0 h-full w-full" aria-hidden="true">
+                        <rect x="9" y="12" width="22" height="17" rx="5" fill="#38bdf8" stroke="#0c4a6e" strokeWidth="1.6" />
+                        <circle cx="16" cy="20" r="2.6" fill="#082f49" />
+                        <circle cx="24" cy="20" r="2.6" fill="#082f49" />
+                        <path d="M16 25h8" stroke="#082f49" strokeWidth="1.6" strokeLinecap="round" />
+                        <path d="M20 12V7" stroke="#0c4a6e" strokeWidth="1.8" strokeLinecap="round" />
+                        <circle cx="20" cy="6" r="2.2" fill="#38bdf8" stroke="#0c4a6e" strokeWidth="1.2" />
+                      </svg>
+                    ) : (
+                      <img
+                        src={`/api/member/avatar/${p.id}`}
+                        alt=""
+                        className="absolute inset-0 h-full w-full object-cover"
+                        onError={(e) => {
+                          e.currentTarget.style.display = "none";
+                        }}
+                      />
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
 
           {/* شمارش معکوس شروع */}
           {countdown > 0 && (
@@ -895,10 +1081,42 @@ export function LudoClient({
             } ${!myTurn && !l.finished ? "opacity-85" : ""}`}
             aria-label={L.yourTurn}
           >
-            <Die v={l.dice?.a ?? 6} rolling={rolling} />
-            <Die v={l.dice?.b ?? 6} rolling={rolling} />
+            <Die3D v={l.dice?.v ?? 6} rolling={rolling} />
           </button>
         </div>
+      </div>
+
+      {/* ---------- داشبورد کوچک چت — داخل پوستهٔ بازی تا در تمام‌صفحه هم بماند ---------- */}
+      <div className="absolute bottom-3 start-3 z-50">
+        {chatOpen && (
+          <div className="mb-2 w-[min(300px,calc(100vw-24px))] overflow-hidden rounded-2xl border border-zinc-700/80 bg-zinc-950/90 shadow-2xl backdrop-blur">
+            <div className="flex items-center justify-between border-b border-zinc-800/80 px-3 py-1.5">
+              <span className="flex items-center gap-1.5 text-xs font-bold text-zinc-200">
+                <MessageCircle className="h-3.5 w-3.5 text-violet-400" aria-hidden="true" />
+                {t.chat.roomTitle}
+              </span>
+              <button
+                onClick={() => setChatOpen(false)}
+                aria-label="close chat"
+                className="rounded-full p-1 text-zinc-500 transition hover:text-zinc-200"
+              >
+                <X className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            </div>
+            <ChatPanel scope={st.room.code} className="h-52" hideHeader />
+          </div>
+        )}
+        <button
+          onClick={() => setChatOpen((v) => !v)}
+          aria-label={t.chat.roomTitle}
+          className={`flex h-10 w-10 items-center justify-center rounded-full border shadow-lg transition-colors ${
+            chatOpen
+              ? "border-zinc-600 bg-zinc-800 text-zinc-200"
+              : "border-violet-400/40 bg-violet-500/90 text-zinc-950 hover:bg-violet-400"
+          }`}
+        >
+          {chatOpen ? <X className="h-4 w-4" aria-hidden="true" /> : <MessageCircle className="h-4 w-4" aria-hidden="true" />}
+        </button>
       </div>
 
       {/* ---------- مودال قوانین ---------- */}

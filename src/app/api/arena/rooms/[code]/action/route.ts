@@ -847,7 +847,7 @@ export async function POST(
         lState.deadline = nowMs + LUDO_MOVE_MS;
         const okp = await persistLudoState(room.id, lState);
         if (!okp) return NextResponse.json({ error: "conflict" }, { status: 409 });
-        return NextResponse.json({ ok: true, a: lState.dice.a, b: lState.dice.b });
+        return NextResponse.json({ ok: true, v: lState.dice.v });
       }
 
       if (type === "ludo_move") {

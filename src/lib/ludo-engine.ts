@@ -98,7 +98,19 @@ export function createLudoState(members: { id: string; name: string }[]): LudoRo
 
 export function parseLudoState(raw: string): LudoRoomState | null {
   try {
-    const d = JSON.parse(raw) as LudoRoomState;
+    const d = JSON.parse(raw) as LudoRoomState & {
+      dice?: { v?: unknown; a?: unknown; b?: unknown } | null;
+    };
+    /* مهاجرت از حالت قدیمی دو‌تاس ({a,b}) به یک‌تاس ({v}) — جمع دو تاس */
+    if (d.dice !== null && d.dice !== undefined) {
+      if (typeof d.dice.v === "number") {
+        d.dice = { v: Math.max(1, Math.min(6, Math.round(d.dice.v))) };
+      } else if (typeof d.dice.a === "number" && typeof d.dice.b === "number") {
+        d.dice = { v: Math.max(2, Math.min(12, d.dice.a + d.dice.b)) };
+      } else {
+        d.dice = null;
+      }
+    }
     if (
       d &&
       d.game === LUDO_GAME_SLUG &&
@@ -125,8 +137,8 @@ export function parseLudoState(raw: string): LudoRoomState | null {
 
 /* ---------- تاس ---------- */
 
-export function rollDice(): { a: number; b: number } {
-  return { a: 1 + Math.floor(Math.random() * 6), b: 1 + Math.floor(Math.random() * 6) };
+export function rollDice(): { v: number } {
+  return { v: 1 + Math.floor(Math.random() * 6) };
 }
 
 /* ---------- رخدادها برای چت سیستمی ---------- */
@@ -293,7 +305,7 @@ function applyAction(
   let captured: string | undefined;
   let surprise: LudoSurpriseKind | undefined;
   const dice = st.dice!;
-  let extraRoll = dice.a === 6 || dice.b === 6;
+  let extraRoll = dice.v === 6; // با هر ۶ پرتاب دوباره
 
   /* زدن مهرهٔ حریف در مقصد اصلی */
   if (action.abs !== null) {
