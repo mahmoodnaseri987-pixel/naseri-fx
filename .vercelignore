@@ -1,0 +1,8 @@
+.env
+.env.build
+.env*.local
+.vercel
+dev.log
+server.log
+*.tsbuildinfo
+scripts/
