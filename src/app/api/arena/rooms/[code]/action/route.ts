@@ -58,6 +58,7 @@ import {
   ludoApplyPlayerAction,
   ludoEventTexts,
   ludoTick,
+  ludoTurnDeadline,
   maybeFinish,
   parseLudoState,
   rollDice,
@@ -787,7 +788,7 @@ export async function POST(
             scope: room.code,
             memberId: me.memberId,
             name: me.name,
-            content: "مسابقهٔ منچ شروع شد — ورود مهره‌ها فقط با جفت‌شش؛ خانه‌های رنگی شروع امن هستند!",
+            content: "مسابقهٔ منچ شروع شد — ورود مهره‌ها فقط با آوردن ۶؛ خانه‌های رنگی شروع امن هستند!",
             kind: "system",
           },
         }),
@@ -912,7 +913,8 @@ export async function POST(
           lState.turnId = lState.order[0] ?? "";
           lState.dice = null;
           lState.rolls = 0;
-          lState.deadline = Date.now() + 400;
+          /* مهلت کامل برای بازیکن بعد — نه چند میلی‌ثانیه (پرش نوبت) */
+          lState.deadline = ludoTurnDeadline(lState, Date.now());
         }
         maybeFinish(lState, Date.now());
         await persistLudoState(room.id, lState);

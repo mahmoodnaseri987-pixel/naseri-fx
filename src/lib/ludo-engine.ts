@@ -14,6 +14,7 @@ import {
   LUDO_BOT_MOVE_VAR,
   LUDO_BOT_ROLL_MIN,
   LUDO_BOT_ROLL_VAR,
+  LUDO_COLUMN_START,
   LUDO_GAME_SLUG,
   LUDO_HOME_STEP,
   LUDO_MOVE_MS,
@@ -234,6 +235,13 @@ function botDeadline(st: LudoRoomState, now: number): number {
     : now + LUDO_TURN_MS;
 }
 
+/** مهلت نوبتِ بازیکنِ نوبت‌دار فعلی — بعد از هر جابه‌جایی نوبت صدا زده شود
+    (بعد از اتمام کار بازیکن یا خروج او، نوبتِ بعدیِ انسان مهلت کامل می‌گیرد،
+    نه چند میلی‌ثانیه — وگرنه تاسش بی‌درنگ خودکار پرتاب می‌شود و نوبت می‌پرد) */
+export function ludoTurnDeadline(st: LudoRoomState, now: number): number {
+  return botDeadline(st, now);
+}
+
 /** نوبت به بازیکن بعدی — پرچم «یک دور بدون تاس» در راه مصرف می‌شود */
 function advanceTurn(st: LudoRoomState, now: number): void {
   if (st.order.length === 0) {
@@ -326,21 +334,25 @@ function applyAction(
     } else {
       const delta = kind === "fwd4" ? 4 : kind === "fwd3" ? 3 : kind === "back4" ? -4 : -3;
       let s2 = steps[action.piece] + delta;
-      if (s2 > LUDO_HOME_STEP) s2 = 2 * LUDO_HOME_STEP - s2;
-      if (s2 < 0) s2 = 0;
-      if (s2 < 51) {
-        const abs2 = ludoAbsCellOf(st.players[playerId]!.color, s2)!;
-        if (!blockedAt(st, playerId, abs2)) {
-          steps[action.piece] = s2;
-          const cap2 = captureAtCell(st, playerId, abs2);
-          if (cap2) {
-            captured = cap2;
-            events.push({ kind: "capture", actor: playerId, victim: cap2 });
-          }
-        }
-        /* مقصد سورپرایز بسته بود — اثر بی‌اثر، مهره می‌ماند */
+      if (s2 > LUDO_HOME_STEP) {
+        /* رسیدن به خانه باید دقیق باشد — سورپرایزی که از خانه رد شود بی‌اثر است؛
+           در این بازی حرکت رو به عقب و فنر نداریم */
       } else {
-        steps[action.piece] = s2; // سورپرایز جلو می‌تواند مستقیم به ستون خانه‌ها برساند
+        if (s2 < 0) s2 = 0; // سازگاری با خانه‌های عقب‌رؤ مسابقه‌های قدیمی
+        if (s2 < LUDO_COLUMN_START) {
+          const abs2 = ludoAbsCellOf(st.players[playerId]!.color, s2)!;
+          if (!blockedAt(st, playerId, abs2)) {
+            steps[action.piece] = s2;
+            const cap2 = captureAtCell(st, playerId, abs2);
+            if (cap2) {
+              captured = cap2;
+              events.push({ kind: "capture", actor: playerId, victim: cap2 });
+            }
+          }
+          /* مقصد سورپرایز بسته بود — اثر بی‌اثر، مهره می‌ماند */
+        } else {
+          steps[action.piece] = s2; // سورپرایز جلو می‌تواند مستقیم به ستون خانه‌ها برساند
+        }
       }
     }
   }
@@ -361,7 +373,8 @@ function applyAction(
     st.turnId = st.order[0] ?? "";
     st.dice = null;
     st.rolls = 0;
-    st.deadline = now + 400;
+    /* مهلت کامل برای بازیکن بعد — مهلت کوتاه باعث پرش نوبت می‌شد */
+    st.deadline = botDeadline(st, now);
   } else if (extraRoll) {
     st.dice = null;
     st.rolls += 1;
@@ -442,7 +455,7 @@ export function ludoBestAction(st: LudoRoomState, playerId: string): LudoAction 
   let best: { action: LudoAction; score: number } | null = null;
   for (const a of legal) {
     let score = a.newStep;
-    if (a.kind === "enter") score = 70; // ورود با جفت‌شش تقریباً همیشه بهترین است
+    if (a.kind === "enter") score = 70; // ورود با ۶ تقریباً همیشه بهترین است
     if (a.captureOf) score = 200; // زدن مهرهٔ حریف اولویت اول
     if (a.newStep === LUDO_HOME_STEP) score = Math.max(score, 150); // رساندن مهره به خانه
     if (a.abs !== null && st.surprise.includes(a.abs)) {

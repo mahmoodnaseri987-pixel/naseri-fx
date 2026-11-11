@@ -216,7 +216,7 @@ export const dict = {
       },
       ludo: {
         lobbyHint:
-          "منچ کلاسیک: هر بازیکن ۴ مهرهٔ هم‌رنگ دارد. در نوبت خود یک تاس می‌ریزی و مهره به همان تعداد جلو می‌رود. ورود مهره به مسیر فقط با آوردن ۶ ممکن است و آوردن هر ۶ یک پرتاب دوباره هم می‌دهد. فرود روی مهرهٔ حریف آن را می‌زند و به پایگاه می‌فرستد. خانهٔ رنگی شروع هر رنگ امن است — هیچ‌کس در آن زده نمی‌شود و اگر با مهرهٔ صاحبش پر باشد، حرکت حریف به آن انجام نمی‌شود. اگر خانهٔ مقصد با مهرهٔ خودت پر باشد، آن حرکت انجام نمی‌شود. رسیدن به خانه باید دقیق باشد و اضافه برمی‌گردد. در هر مسابقه ۵ خانهٔ سورپرایز با جای تصادفی هست: ۴ جلو، ۳ جلو، ۴ عقب، ۳ عقب و پرتاب دوبارهٔ تاس. ۱۵ ثانیه برای هر نوبت داری؛ اگر حرکت ندهی، تاس و حرکت خودکار انجام می‌شود. برنده اولین نفری است که هر ۴ مهره‌اش را به خانه برساند؛ بازی تا رسیدن بقیه ادامه دارد و رتبه‌ها با امتیاز اعلام می‌شود.",
+          "منچ کلاسیک: هر بازیکن ۴ مهرهٔ هم‌رنگ دارد. در نوبت خود یک تاس می‌ریزی و مهره به همان تعداد جلو می‌رود. ورود مهره به مسیر فقط با آوردن ۶ ممکن است و آوردن هر ۶ یک پرتاب دوباره هم می‌دهد. فرود روی مهرهٔ حریف آن را می‌زند و به پایگاه می‌فرستد. خانهٔ رنگی شروع هر رنگ امن است — هیچ‌کس در آن زده نمی‌شود و اگر با مهرهٔ صاحبش پر باشد، حرکت حریف به آن انجام نمی‌شود. اگر خانهٔ مقصد با مهرهٔ خودت پر باشد، آن حرکت انجام نمی‌شود. رسیدن به خانه فقط با عدد دقیق ممکن است؛ اگر عدد مناسب نیاید آن مهره نمی‌تواند حرکت کند — هیچ حرکتی رو به عقب نداریم. در هر مسابقه ۵ خانهٔ سورپرایز با جای تصادفی هست: ۴ جلو، ۳ جلو و پرتاب دوبارهٔ تاس. ۱۸ ثانیه برای هر نوبت داری؛ اگر حرکت ندهی، تاس و حرکت خودکار انجام می‌شود. برنده اولین نفری است که هر ۴ مهره‌اش را به خانه برساند؛ بازی تا رسیدن بقیه ادامه دارد و رتبه‌ها با امتیاز اعلام می‌شود.",
         rulesTitle: "قوانین منچ",
         rulesShort: "ورود با آوردن ۶ • زدن مهرهٔ حریف • خانهٔ شروع امن",
         startingIn: "تخته تا چند ثانیه دیگر آماده می‌شود…",
@@ -253,9 +253,9 @@ export const dict = {
         rule5: "فرود روی مهرهٔ حریف در خانهٔ غیرامن، او را می‌زند؛ مهرهٔ زده‌شده به پایگاه برمی‌گردد و برای ورود دوباره به آوردن ۶ نیاز دارد.",
         rule6: "خانهٔ رنگی شروع هر رنگ امن است: هیچ‌کس آن‌جا زده نمی‌شود؛ اگر با مهرهٔ صاحبش پر باشد، حرکت حریف به آن انجام نمی‌شود و نوبت به نفر بعد می‌رسد.",
         rule7: "اگر خانهٔ مقصد با مهرهٔ خودت پر باشد، آن حرکت انجام نمی‌شود و نوبت به نفر بعد می‌رود.",
-        rule8: "رسیدن مهره به خانه باید دقیق باشد؛ اضافه‌اش فنری برمی‌گردد.",
-        rule9: "۵ خانهٔ سورپرایز در جای تصادفی هر مسابقه: ۴ جلو، ۳ جلو، ۴ عقب، ۳ عقب، پرتاب دوباره.",
-        rule10: "۱۵ ثانیه مهلت هر نوبت — بعدش تاس و حرکت خودکار انجام می‌شود.",
+        rule8: "رسیدن مهره به خانه فقط با عدد دقیق ممکن است؛ اگر عدد دیگری بیاید آن مهره نمی‌تواند حرکت کند — هیچ حرکتی رو به عقب نداریم.",
+        rule9: "۵ خانهٔ سورپرایز در جای تصادفی هر مسابقه: دو خانه ۴ جلو، دو خانه ۳ جلو و یک خانهٔ پرتاب دوبارهٔ تاس.",
+        rule10: "۱۸ ثانیه مهلت هر نوبت — بعدش تاس و حرکت خودکار انجام می‌شود.",
         rule11: "اولین نفری که هر ۴ مهره‌اش را به خانه برساند برنده است؛ بازی تا رسیدن بقیه ادامه دارد و رتبه‌ها با امتیاز اعلام می‌شود.",
       },
       room: {
@@ -678,7 +678,7 @@ export const dict = {
       },
       ludo: {
         lobbyHint:
-          "Classic Ludo: each player has 4 same-color pieces. On your turn you roll one die and a piece moves by that number. A piece can only enter the track with a 6, and every 6 also grants one extra roll. Landing on a rival's piece captures it and sends it back to its yard. Each color's start cell is safe — nobody can be captured there, and if it is occupied by its owner's piece, a rival's move onto it is cancelled. If the destination is occupied by your own piece, the move is not allowed. Reaching home needs an exact count — the excess bounces back. Every match has 5 surprise cells at random spots: 4 forward, 3 forward, 4 back, 3 back and a re-roll. You get 15 seconds per turn; otherwise the dice and move play automatically. The first player to bring all 4 pieces home wins; the game continues until everyone finishes and ranks are scored.",
+          "Classic Ludo: each player has 4 same-color pieces. On your turn you roll one die and a piece moves by that number. A piece can only enter the track with a 6, and every 6 also grants one extra roll. Landing on a rival's piece captures it and sends it back to its yard. Each color's start cell is safe — nobody can be captured there, and if it is occupied by its owner's piece, a rival's move onto it is cancelled. If the destination is occupied by your own piece, the move is not allowed. Reaching home needs an exact count — if another number comes up, that piece cannot move; there is no backward movement in this game. Every match has 5 surprise cells at random spots: 4 forward, 3 forward and a re-roll. You get 18 seconds per turn; otherwise the dice and move play automatically. The first player to bring all 4 pieces home wins; the game continues until everyone finishes and ranks are scored.",
         rulesTitle: "Ludo rules",
         rulesShort: "Enter with a 6 • capture rivals • start cells are safe",
         startingIn: "The board is readying in seconds…",
@@ -715,9 +715,9 @@ export const dict = {
         rule5: "Landing on a rival piece in a non-safe cell captures it; it returns to the yard and needs a 6 to re-enter.",
         rule6: "Each color's start cell is safe: nothing can be captured there; if occupied by its owner, a rival's move onto it is cancelled and the turn passes.",
         rule7: "If the destination cell holds your own piece, the move is not allowed and the turn passes.",
-        rule8: "A piece must reach home by exact count; the excess bounces back.",
-        rule9: "5 surprise cells at random spots each match: 4 forward, 3 forward, 4 back, 3 back, re-roll.",
-        rule10: "Each turn has a 15-second limit — afterwards the dice and move play automatically.",
+        rule8: "A piece must reach home on an exact count; if any other number comes up, that piece cannot move — there is no backward movement in this game.",
+        rule9: "5 surprise cells at random spots each match: two 4-forward, two 3-forward and one re-roll cell.",
+        rule10: "Each turn has an 18-second limit — afterwards the dice and move play automatically.",
         rule11: "The first player to bring all 4 pieces home wins; play continues until everyone finishes and ranks are scored.",
       },
       room: {

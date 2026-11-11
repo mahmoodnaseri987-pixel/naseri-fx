@@ -36,9 +36,11 @@ import {
   LUDO_HOME_STEP,
   LUDO_HOME_ANCHORS,
   LUDO_COLOR_INFO,
+  LUDO_MOVE_MS,
   LUDO_START_ABS,
   LUDO_TRACK,
   LUDO_TRACK_CELLS,
+  LUDO_TURN_MS,
   ludoAbsCellOf,
   ludoActionsFor,
   type LudoColor,
@@ -61,6 +63,11 @@ import type { ArenaStateResponse } from "@/lib/types";
 
 const CELL = 40;
 const BOARD = CELL * 15;
+
+/* ریتم بازی — چرخش آهستهٔ تاس و مکث کافی بعد از هر پرتاب تا نوبت‌ها دیده شود */
+const ROLL_SPIN_MS = 1500; // مدت چرخش تاس (آهسته و قابل‌مشاهده)
+const SETTLE_MS = 950; // مکث بعد از فرود تاس — قبل از شروع حرکت‌ها
+const STEP_MS = 430; // فاصلهٔ هر گام مهره — نرم و قابل‌مشاهده
 
 /** جای نشان صاحب پایگاه — روی نوار بیرونی هر پایگاه (درصد اندازهٔ تخته) */
 const LUDO_AVATAR_POS: Record<LudoColor, [number, number]> = {
@@ -126,10 +133,10 @@ const DIE_FACE_ROTATION: Record<number, string> = {
   6: "rotateX(0deg) rotateY(180deg)",
 };
 
-/** تاس سه‌بعدی CSS — چرخش نرم هنگام پرتاب، فرود روی عدد واقعی سرور */
-function Die3D({ v, rolling }: { v: number; rolling: boolean }) {
+/** تاس سه‌بعدی CSS — چرخش نرم و آهسته هنگام پرتاب، فرود روی عدد واقعی سرور */
+function Die3D({ v, rolling, settle }: { v: number; rolling: boolean; settle: boolean }) {
   return (
-    <div className="ludo-die-scene" aria-hidden="true">
+    <div className={`ludo-die-scene ${settle ? "ludo-die-settle" : ""}`} aria-hidden="true">
       <div
         className={`ludo-die ${rolling ? "ludo-die-rolling" : ""}`}
         style={rolling ? undefined : { transform: DIE_FACE_ROTATION[v] }}
@@ -263,9 +270,8 @@ export function LudoClient({
           }
         }
         if (b >= 0 && s >= 0 && diceV !== null) {
-          const normal = s > b ? b + diceV : b - diceV;
-          const bounced = normal > LUDO_HOME_STEP ? 2 * LUDO_HOME_STEP - normal : normal;
-          if (s !== bounced) surpriseGood = s > b;
+          const expected = s > b ? b + diceV : b - diceV;
+          if (s !== expected) surpriseGood = s > b;
         }
         if (s === LUDO_HOME_STEP && b !== LUDO_HOME_STEP) homeHit = true;
         /* رنگ‌شدن خانهٔ فرود به رنگ مهره */
@@ -312,9 +318,8 @@ export function LudoClient({
           const sum = diceV ?? Math.abs(s - b);
           const chain: ChainStep[] = [];
           for (let k = 1; k <= sum; k++) {
-            let h = b + k;
-            if (h > LUDO_HOME_STEP) h = 2 * LUDO_HOME_STEP - h;
-            chain.push({ p: stepPoint(color, Math.max(-1, h), i), hop: h < LUDO_HOME_STEP, color });
+            const h = b + k;
+            chain.push({ p: stepPoint(color, h, i), hop: h < LUDO_HOME_STEP, color });
           }
           if (chain.length === 0 || Math.abs(s - b) !== sum) {
             /* سورپرایز مسیر را عوض کرده — دو گام مستقیم تا مقصد نهایی */
@@ -352,7 +357,7 @@ export function LudoClient({
         posRef.current = { ...cur };
         forceRender((x) => x + 1);
         if (anyHop) sfxHop(); // صدای قدم در هر خانه
-        await new Promise((r) => setTimeout(r, 205));
+        await new Promise((r) => setTimeout(r, STEP_MS));
       }
       if (animToken.current !== myToken) return;
       posRef.current = { ...posRef.current, ...targets };
@@ -371,39 +376,50 @@ export function LudoClient({
   const movable = useMemo(() => new Set(legal.map((a) => a.piece)), [legal]);
   const hasEnter = legal.some((a) => a.kind === "enter");
 
-  /* پاس خودکار وقتی هیچ حرکتی ممکن نیست */
-  const passSeqRef = useRef(-1);
-  useEffect(() => {
-    if (!myTurn || !l.dice || l.finished) return;
-    if (legal.length === 0 && passSeqRef.current !== l.seq) {
-      passSeqRef.current = l.seq;
-      void sendAction({ type: "ludo_pass" });
-    }
-  }, [myTurn, l.dice, legal.length, l.finished, l.seq, sendAction]);
-
-  /* ---------- صدا: تاس چوبی، دینگ ۶، اتمام بازیکن، برد و باخت ---------- */
+  /* ---------- ریتم تاس: چرخش آهسته + مکث فرود — قبل از هر واکنشی ---------- */
   const rollingRef = useRef(false);
   const [rolling, setRolling] = useState(false);
+  const [settling, setSettling] = useState(false);
   const clickRollRef = useRef(false); // پرتابِ دستی خودم — صدای تاس در کلیک پخش شده
   const diceKey = l.dice ? `${l.dice.v}-${l.seq}` : "";
   const lastDiceKey = useRef("");
+  const settleTimersRef = useRef<number[]>([]);
   useEffect(() => {
     if (!diceKey || lastDiceKey.current === diceKey) return;
     lastDiceKey.current = diceKey;
     const v = l.dice?.v ?? 0;
-    /* چرخش کوتاه تاس تا فرود روی عدد سرور */
+    /* چرخش آهستهٔ تاس تا فرود روی عدد سرور، سپس مکث کامل تا همه عدد را ببینند */
     if (!rollingRef.current) {
       rollingRef.current = true;
       setRolling(true);
     }
     if (!clickRollRef.current) sfxDice();
     clickRollRef.current = false;
-    window.setTimeout(() => {
+    const t1 = window.setTimeout(() => {
       rollingRef.current = false;
       setRolling(false);
-      if (v === 6) window.setTimeout(() => sfxDing(), 300); // دینگ آوردن ۶
-    }, 900);
+      setSettling(true);
+      if (v === 6) window.setTimeout(() => sfxDing(), 350); // دینگ آوردن ۶
+      const t2 = window.setTimeout(() => setSettling(false), SETTLE_MS);
+      settleTimersRef.current.push(t2);
+    }, ROLL_SPIN_MS);
+    settleTimersRef.current.push(t1);
+    return () => {
+      settleTimersRef.current.forEach((x) => window.clearTimeout(x));
+      settleTimersRef.current = [];
+    };
   }, [diceKey]);
+
+  /* پاس خودکار وقتی هیچ حرکتی ممکن نیست — ولی فقط بعد از مکث فرود تاس،
+     تا بازیکن عدد تاس را ببیند و نوبت جلوی چشمش رد نشود */
+  const passSeqRef = useRef(-1);
+  useEffect(() => {
+    if (!myTurn || !l.dice || l.finished || rolling || settling) return;
+    if (legal.length === 0 && passSeqRef.current !== l.seq) {
+      passSeqRef.current = l.seq;
+      void sendAction({ type: "ludo_pass" });
+    }
+  }, [myTurn, l.dice, legal.length, l.finished, l.seq, rolling, settling, sendAction]);
 
   /* اتمام کار یک بازیکن — فانفار کوتاه */
   const finisherRef = useRef("");
@@ -449,13 +465,14 @@ export function LudoClient({
         rollingRef.current = false;
         setRolling(false);
       }
-    }, 2600);
+    }, ROLL_SPIN_MS + 1200);
   }, [myTurn, l.dice, l.finished, sendAction]);
 
   const [shakeKey, setShakeKey] = useState<string | null>(null);
   const movePiece = useCallback(
     async (piece: number) => {
-      if (!myTurn || !l.dice || l.finished) return;
+      /* در چرخش و مکث فرود تاس، مهره‌ها واکنشی نیستند */
+      if (!myTurn || !l.dice || l.finished || rolling || settling) return;
       if (!movable.has(piece)) {
         setShakeKey(`${me}:${piece}`);
         setTimeout(() => setShakeKey(null), 500);
@@ -467,7 +484,7 @@ export function LudoClient({
         setTimeout(() => setShakeKey(null), 500);
       }
     },
-    [myTurn, l.dice, l.finished, movable, me, sendAction],
+    [myTurn, l.dice, l.finished, rolling, settling, movable, me, sendAction],
   );
 
   /* ---------- تمام‌صفحه ---------- */
@@ -536,6 +553,7 @@ export function LudoClient({
       finishedPlayer: boolean;
     }[] = [];
     const playerById = new Map(l.players.map((p) => [p.id, p]));
+    const movesVisible = !rolling && !settling; // تا مکث فرود تاس، نبض مهره‌ها پنهان است
     for (const [gkey, keys] of groups) {
       const [gx, gy] = gkey.split(",").map(Number);
       keys.sort();
@@ -555,7 +573,7 @@ export function LudoClient({
           x: base[0] + off,
           y: base[1],
           scale: keys.length > 1 ? 0.82 : 1,
-          movable: movable.has(idxStr) && pid === me && myTurn,
+          movable: movesVisible && movable.has(idxStr) && pid === me && myTurn,
           online: player?.online ?? true,
           finishedPlayer: player?.finished ?? false,
         });
@@ -565,11 +583,16 @@ export function LudoClient({
     }
     /* مهره‌های قابل‌حرکت و نوبت‌دار رو قرار می‌گیرند */
     return nodes.sort((a, b) => Number(a.movable) - Number(b.movable) || a.y - b.y);
-  }, [colorOf, movable, me, myTurn, l.players, tick]);
+  }, [colorOf, movable, me, myTurn, l.players, rolling, settling, tick]);
 
   const turnPlayer = l.players.find((p) => p.id === l.turnId);
   const remainingMs = Math.max(0, l.deadline - localNow);
-  const timerFrac = Math.min(1, Math.max(0, remainingMs / 15_000));
+  /* پنجرهٔ زمانی نوبت — پرتاب یا انتخاب حرکت؛ برای قوس زمان دور تاس */
+  const windowMs = l.dice ? LUDO_MOVE_MS : LUDO_TURN_MS;
+  const timerFrac = Math.min(1, Math.max(0, remainingMs / windowMs));
+  const turnColor = turnPlayer ? LUDO_COLOR_INFO[turnPlayer.color].base : "#fbbf24";
+  const myInfo = myColor !== undefined ? LUDO_COLOR_INFO[myColor] : null;
+  const ctaActive = myTurn && !l.dice && !l.finished && countdown === 0 && !rolling;
 
   const surpriseBadge = (kind: LudoSurpriseKind): { good: boolean; chevrons: 0 | 1 | 2; back: boolean } => ({
     good: kind === "fwd4" || kind === "fwd3" || kind === "again",
@@ -587,7 +610,7 @@ export function LudoClient({
       }
     >
       <style>{`
-        .ludo-piece { transition: transform 205ms cubic-bezier(.34,1.35,.5,1); will-change: transform; }
+        .ludo-piece { transition: transform 400ms cubic-bezier(.32,.72,.35,1.06); will-change: transform; }
         .ludo-pulse { transform-box: fill-box; transform-origin: center; animation: ludoPulse 1.15s ease-in-out infinite; }
         @keyframes ludoPulse { 0%,100% { transform: scale(1); opacity: .35 } 50% { transform: scale(1.28); opacity: .95 } }
         .ludo-shake { animation: ludoShake .5s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
@@ -609,9 +632,11 @@ export function LudoClient({
         @keyframes ludoBoardShake { 0%,100% { transform: translate(0,0) rotate(0deg) } 22% { transform: translate(-5px,2px) rotate(-.45deg) } 48% { transform: translate(4px,-2px) rotate(.35deg) } 72% { transform: translate(-2px,1px) } }
         .ludo-die-scene { width: 64px; height: 64px; perspective: 480px; }
         @media (max-width: 639px) { .ludo-die-scene { transform: scale(.84); margin: -7px; } }
-        .ludo-die { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; transition: transform .5s cubic-bezier(.25,.8,.35,1.12); }
-        .ludo-die-rolling { animation: ludoTumble .82s cubic-bezier(.32,.44,.58,1) infinite; }
-        @keyframes ludoTumble { 0% { transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg) } 100% { transform: rotateX(720deg) rotateY(960deg) rotateZ(200deg) } }
+        .ludo-die-settle { animation: ludoSettlePop .95s ease-out; }
+        @keyframes ludoSettlePop { 0% { transform: scale(1) } 30% { transform: scale(1.14); filter: drop-shadow(0 0 10px rgba(251,191,36,.65)) } 100% { transform: scale(1) } }
+        .ludo-die { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; transition: transform .6s cubic-bezier(.2,.8,.3,1.1); }
+        .ludo-die-rolling { animation: ludoTumble 1.5s cubic-bezier(.45,.1,.55,.9) infinite; }
+        @keyframes ludoTumble { 0% { transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg) } 100% { transform: rotateX(720deg) rotateY(720deg) rotateZ(360deg) } }
         .ludo-die-face { position: absolute; inset: 0; border-radius: 14px; background: linear-gradient(150deg,#fffef8 0%,#f6ecd2 55%,#e4d3aa 100%); border: 1px solid #c9b78d; box-shadow: inset 0 0 12px rgba(255,255,255,.8), inset 0 -3px 8px rgba(176,146,86,.4); }
         .ludo-die-face-1 { transform: translateZ(32px) }
         .ludo-die-face-6 { transform: rotateY(180deg) translateZ(32px) }
@@ -638,9 +663,18 @@ export function LudoClient({
                   key={p.id}
                   className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 transition-all ${
                     isTurn
-                      ? "scale-105 border-amber-400/70 bg-amber-400/10 shadow-[0_0_16px_rgba(251,191,36,0.25)]"
+                      ? "scale-105"
                       : "border-zinc-800 bg-zinc-900/70"
                   } ${p.online ? "" : "opacity-45"}`}
+                  style={
+                    isTurn
+                      ? {
+                          borderColor: info.base,
+                          background: `${info.base}1f`,
+                          boxShadow: `0 0 16px ${info.base}40`,
+                        }
+                      : undefined
+                  }
                 >
                   <svg viewBox="0 0 20 20" className="h-4 w-4 shrink-0" aria-hidden="true">
                     <circle cx="10" cy="7" r="4.6" fill={info.base} />
@@ -912,12 +946,12 @@ export function LudoClient({
                     left: `${pos[0]}%`,
                     top: `${pos[1]}%`,
                     width: "7.4%",
-                    filter: isTurn ? "drop-shadow(0 0 6px rgba(251,191,36,.9))" : undefined,
+                    filter: isTurn ? `drop-shadow(0 0 6px ${info.base})` : undefined,
                   }}
                 >
                   <div
                     className="relative h-full w-full overflow-hidden rounded-full border-2"
-                    style={{ borderColor: isTurn ? "#fbbf24" : info.dark, background: info.light }}
+                    style={{ borderColor: isTurn ? info.base : info.dark, background: info.light }}
                   >
                     <svg viewBox="0 0 40 40" className="absolute inset-0 h-full w-full" aria-hidden="true">
                       <circle cx="20" cy="14" r="7.5" fill={info.base} />
@@ -1052,8 +1086,8 @@ export function LudoClient({
 
         {/* ---------- تاس و نوبت ---------- */}
         <div className="relative flex items-center justify-center gap-3 py-1">
-          {/* حلقهٔ زمان نوبت — فقط وقتی نوبت من است */}
-          {myTurn && !l.finished && countdown === 0 && (
+          {/* حلقهٔ رنگی دور تاس — همیشه به رنگ تیمِ نوبت‌دار */}
+          {!l.finished && countdown === 0 && turnPlayer && (
             <svg viewBox="0 0 96 96" className="absolute left-1/2 top-1/2 h-[106px] w-[106px] -translate-x-1/2 -translate-y-1/2" aria-hidden="true">
               <circle cx="48" cy="48" r="44" fill="none" stroke="#27272a" strokeWidth="6" />
               <circle
@@ -1061,13 +1095,13 @@ export function LudoClient({
                 cy="48"
                 r="44"
                 fill="none"
-                stroke={timerFrac > 0.5 ? "#34d399" : timerFrac > 0.22 ? "#fbbf24" : "#fb7185"}
+                stroke={turnColor}
                 strokeWidth="6"
                 strokeLinecap="round"
                 strokeDasharray={`${2 * Math.PI * 44}`}
                 strokeDashoffset={`${2 * Math.PI * 44 * (1 - timerFrac)}`}
                 transform="rotate(-90 48 48)"
-                style={{ transition: "stroke-dashoffset .2s linear, stroke .3s" }}
+                style={{ transition: "stroke-dashoffset .2s linear, stroke .3s", opacity: timerFrac > 0 ? 1 : 0.35 }}
               />
             </svg>
           )}
@@ -1075,13 +1109,20 @@ export function LudoClient({
             onClick={() => void roll()}
             disabled={!myTurn || Boolean(l.dice) || l.finished || countdown > 0}
             className={`flex items-center justify-center gap-2 rounded-2xl border p-3 transition ${
-              myTurn && !l.dice && !l.finished && countdown === 0
-                ? "ludo-roll-cta border-amber-400/70 bg-amber-400/15 shadow-[0_0_22px_rgba(251,191,36,0.3)]"
-                : "border-zinc-800 bg-zinc-900/70"
+              ctaActive ? "ludo-roll-cta" : "border-zinc-800 bg-zinc-900/70"
             } ${!myTurn && !l.finished ? "opacity-85" : ""}`}
+            style={
+              ctaActive && myInfo
+                ? {
+                    borderColor: myInfo.base,
+                    background: `${myInfo.base}26`,
+                    boxShadow: `0 0 22px ${myInfo.base}59`,
+                  }
+                : undefined
+            }
             aria-label={L.yourTurn}
           >
-            <Die3D v={l.dice?.v ?? 6} rolling={rolling} />
+            <Die3D v={l.dice?.v ?? 6} rolling={rolling} settle={settling} />
           </button>
         </div>
       </div>
