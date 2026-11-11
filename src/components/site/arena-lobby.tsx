@@ -27,7 +27,7 @@ import { MemberAvatar } from "@/components/site/member-avatar";
 import { AvatarPicker } from "@/components/site/avatar-picker";
 import { ChatPanel } from "@/components/site/chat-panel";
 import { subscribeStream } from "@/lib/realtime";
-import { ARENA_GAME_SLUG, MAX_PLAYERS, MIN_PLAYERS } from "@/lib/arena-game";
+import { ARENA_GAME_SLUG, AGE_GROUPS, MAX_PLAYERS, MIN_PLAYERS, type AgeGroup } from "@/lib/arena-game";
 import { NABARD_GAME_SLUG } from "@/lib/nabard-engine";
 import { JADVAL_GAME_SLUG } from "@/lib/jadval-shared";
 import { PIC_GAME_SLUG } from "@/lib/pic-shared";
@@ -57,6 +57,7 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
   const [error, setError] = useState("");
   const [gameSlug, setGameSlug] = useState<string>(ARENA_GAME_SLUG);
   const [playerCount, setPlayerCount] = useState<number>(MAX_PLAYERS);
+  const [ageGroup, setAgeGroup] = useState<AgeGroup>("adult");
 
   const numFmt = useCallback(
     (n: number) => new Intl.NumberFormat(lang === "fa" ? "fa-IR" : "en-US").format(n),
@@ -106,7 +107,7 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
       const res = await fetch("/api/arena/rooms", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ gameSlug, maxPlayers: playerCount }),
+        body: JSON.stringify({ gameSlug, maxPlayers: playerCount, ageGroup }),
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.code) {
@@ -312,7 +313,7 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
             </div>
             )}
 
-            {/* دعوت‌نامه — تعداد بازیکنان اتاق؛ از ۲ تا ۱۰ */}
+            {/* دعوت‌نامه — تعداد بازیکنان اتاق؛ از ۲ تا ۸ */}
             <div className="mt-4">
               <p className="text-xs font-bold text-zinc-400">{a.playersLabel}</p>
               <div className="mt-2 flex flex-wrap gap-1.5">
@@ -335,6 +336,33 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
                 )}
               </div>
               <p className="mt-2 text-[11px] leading-5 text-zinc-500">{a.playersHint}</p>
+            </div>
+
+            {/* گروه سنی — سؤال‌های چالش سرعتی و جدول متناسب با سن تنظیم می‌شوند */}
+            <div className="mt-4">
+              <p className="text-xs font-bold text-zinc-400">{a.ageLabel}</p>
+              <div className="mt-2 grid gap-1.5 sm:grid-cols-3" role="radiogroup" aria-label={a.ageLabel}>
+                {AGE_GROUPS.map((g) => {
+                  const label = g === "kid" ? a.ageKid : g === "pro" ? a.agePro : a.ageAdult;
+                  return (
+                    <button
+                      key={g}
+                      type="button"
+                      role="radio"
+                      aria-checked={g === ageGroup}
+                      onClick={() => setAgeGroup(g)}
+                      className={`rounded-xl border px-3 py-2.5 text-sm font-bold transition-colors ${
+                        g === ageGroup
+                          ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-200"
+                          : "border-zinc-800 bg-zinc-950/40 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-2 text-[11px] leading-5 text-zinc-500">{a.ageHint}</p>
             </div>
 
             <Button

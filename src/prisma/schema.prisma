@@ -56,6 +56,8 @@ model Member {
   avatarUrl    String    @default("") // عکس پروفایل به‌صورت data URL — اجباری برای چت و آرنا
   blocked      Boolean   @default(false) // مسدودشده توسط مدیر
   lastLoginAt  DateTime?
+  lastSeenAt   DateTime? // آخرین تپش قلب عضو در سایت — برای نمایش «حضوری» آنلاین
+  ageGroup     String    @default("adult") // گروه سنی: kid | adult | pro — سؤال‌ها متناسب با سن تنظیم می‌شوند
   createdAt    DateTime  @default(now())
 }
 
@@ -124,6 +126,7 @@ model Room {
   hostId       String   // عضو میزبان
   status       String   @default("lobby") // lobby | playing | finished
   maxPlayers   Int      @default(8)
+  ageGroup     String   @default("adult") // گروه سنی میزبان — سؤال‌ها متناسب با آن؛ تا «مسابقه دوباره» حفظ می‌شود
   state        String   @default("{}") // وضعیت بازی به‌صورت JSON
   lastActivity DateTime @default(now())
   createdAt    DateTime @default(now())
@@ -222,4 +225,18 @@ model ContentBox {
   sortOrder   Int      @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+// رکورد جدول برترین‌ها — بازی‌های تک‌نفره و رکوردی (میدان آتش و بازی‌های آپلودی)
+model GameScore {
+  id        String   @id @default(cuid())
+  gameSlug  String // اسلاگ بازی: fire-offline یا اسلاگ بازی آپلودی
+  memberId  String   @default("") // خالی = رکورد مهمان با نام نمایشی
+  name      String // نام نمایشی بازیکن
+  score     Int
+  detail    Json? // جزئیات اختیاری: موج، حذف، مرحله و...
+  createdAt DateTime @default(now())
+
+  @@index([gameSlug, score])
+  @@index([memberId])
 }

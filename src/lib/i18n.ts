@@ -92,7 +92,7 @@ export const dict = {
       badge: "آرنا رقابتی",
       title: "با هم رقابت کن!",
       subtitle:
-        "اتاق بساز، دعوت‌نامه را در لابی ببین و ۲ تا ۱۰ نفره رقابت کن؛ صندلی‌های خالی را هم می‌توانی با ربات پر کنی. امتیازها زنده به‌روز می‌شوند.",
+        "اتاق بساز، دعوت‌نامه را در لابی ببین و ۲ تا ۸ نفره رقابت کن؛ صندلی‌های خالی را هم می‌توانی با ربات پر کنی. امتیازها زنده به‌روز می‌شوند.",
       createCta: "ساخت اتاق جدید",
       creating: "در حال ساخت…",
       createHint: "چالش سرعتی: ۱۰ سؤال، هر پاسخ درست ۶۰ تا ۱۲۰ امتیاز — سریع‌تر بزنی بیشتر می‌گیری!",
@@ -125,6 +125,13 @@ export const dict = {
       noGames: "فعلاً بازی فعالی در آرنا نیست؛ به‌زودی برمی‌گردد.",
       playersLabel: "تعداد بازیکن در اتاق",
       playersHint: "دعوت‌نامهٔ تو تا تکمیل ظرفیت برای همه در «اتاق‌های باز» دیده می‌شود.",
+      ageLabel: "گروه سنی بازی",
+      ageKid: "کودکان",
+      ageAdult: "بزرگسالان",
+      agePro: "حرفه‌ای‌ها",
+      ageHint: "سؤال‌های چالش سرعتی و رقابت جدول متناسب با همین انتخاب آسان‌تر یا سخت‌تر می‌شوند.",
+      roomAgeKid: "سؤال‌ها: کودکان",
+      roomAgePro: "سؤال‌ها: حرفه‌ای‌ها",
       jadval: {
         lobbyHint:
           "با شروع مسابقه، بازیکنان به‌طور خودکار به دو تیم سبز و قرمز تقسیم می‌شوند. چت هر تیم فقط برای همان تیم دیده می‌شود — با هم‌تیمی‌ها توافق کنید بعد واژه را بزنید. هر واژه فقط برای اولین تیمی که بزند امتیاز دارد؛ برای تیم مقابل خط می‌خورد ولی حروفش راهنمای بقیهٔ سؤال‌ها می‌ماند.",
@@ -296,6 +303,8 @@ export const dict = {
       againCta: "دوباره بجنگ",
       soundOn: "قطع صدا",
       soundOff: "وصل صدا",
+      cleanOn: "حالت پاک — بازی بدون نوشته",
+      cleanOff: "نمایش اطلاعات بازی",
     },
     fireOnline: {
       menuCta: "بازی گروهی (آنلاین)",
@@ -345,6 +354,8 @@ export const dict = {
       codeShort: "کد اتاق ۵ حرفی است",
       netP2p: "مستقیم",
       netRelay: "رله",
+      cleanOn: "حالت پاک — بازی بدون نوشته",
+      cleanOff: "نمایش اطلاعات بازی",
     },
     hero: {
       badge: "سازنده اپلیکیشن‌های موبایل",
@@ -497,7 +508,7 @@ export const dict = {
       badge: "Competitive arena",
       title: "Compete together!",
       subtitle:
-        "Create a room, share its code with friends and race 2–10 players; empty seats can be filled with bots. Live scores for everyone.",
+        "Create a room, share its code with friends and race 2–8 players; empty seats can be filled with bots. Live scores for everyone.",
       createCta: "Create a new room",
       creating: "Creating…",
       createHint: "Speed Challenge: 10 questions, every correct answer scores 60-120 — the faster you answer, the more you get!",
@@ -530,6 +541,13 @@ export const dict = {
       noGames: "No active games in the arena right now — check back soon.",
       playersLabel: "Players in the room",
       playersHint: "Your invite stays visible to everyone under “Open rooms” until it fills up.",
+      ageLabel: "Age group",
+      ageKid: "Kids",
+      ageAdult: "Adults",
+      agePro: "Pros",
+      ageHint: "Speed Quiz and Crossword Race questions get easier or harder based on this choice.",
+      roomAgeKid: "Questions: kids",
+      roomAgePro: "Questions: pros",
       jadval: {
         lobbyHint:
           "When the match starts, players are split into Green and Red teams. Each team's chat is visible only to that team — agree with your teammates, then submit the word.",
@@ -701,6 +719,8 @@ export const dict = {
       againCta: "Fight again",
       soundOn: "Mute",
       soundOff: "Unmute",
+      cleanOn: "Clean mode — play without text",
+      cleanOff: "Show game info",
     },
     fireOnline: {
       menuCta: "Group play (online)",
@@ -750,6 +770,8 @@ export const dict = {
       codeShort: "Room code is 5 characters",
       netP2p: "direct",
       netRelay: "relay",
+      cleanOn: "Clean mode — play without text",
+      cleanOff: "Show game info",
     },
     hero: {
       badge: "Mobile App Developer",

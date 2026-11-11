@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { ensureSetup } from "@/lib/public-data";
 import { memberGuard } from "@/lib/member-auth";
-import { ARENA_GAME_SLUG, MAX_PLAYERS, MIN_PLAYERS, generateRoomCode } from "@/lib/arena-game";
+import { ARENA_GAME_SLUG, MAX_PLAYERS, MIN_PLAYERS, normalizeAgeGroup, generateRoomCode } from "@/lib/arena-game";
 import { NABARD_GAME_SLUG } from "@/lib/nabard-engine";
 import { JADVAL_GAME_SLUG } from "@/lib/jadval-shared";
 import { PIC_GAME_SLUG } from "@/lib/pic-shared";
@@ -84,6 +84,13 @@ export async function POST(req: NextRequest) {
       ? rawMax
       : MAX_PLAYERS;
 
+  /* گروه سنی اتاق — سؤال‌ها (چالش سرعتی و جدول) متناسب با آن تنظیم می‌شوند؛
+     انتخاب میزبان روی پروفایل خودش هم ذخیره می‌شود تا دفعه بعد پیش‌فرض باشد */
+  const ageGroup = normalizeAgeGroup(body.ageGroup);
+  void db.member
+    .update({ where: { id: guard.member.id }, data: { ageGroup } })
+    .catch(() => undefined);
+
   /* بازی ممکن است موقتاً توسط مدیر از آرنا حذف/غیرفعال شده باشد */
   if (!(await isRoomGameEnabled(gameSlug))) {
     return NextResponse.json({ error: "game-disabled" }, { status: 403 });
@@ -124,7 +131,8 @@ export async function POST(req: NextRequest) {
           hostId: guard.member.id,
           status: "lobby",
           maxPlayers,
-          state: "{}",
+          ageGroup, // گروه سنی اتاق روی خود اتاق — تا «مسابقه دوباره» حفظ می‌شود
+          state: JSON.stringify({ ageGroup }), // گروه سنی اتاق تا لحظهٔ شروع حفظ می‌شود
         },
       });
       await db.roomMember.create({

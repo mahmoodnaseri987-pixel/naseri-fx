@@ -9,6 +9,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
+  Eye,
+  EyeOff,
   Flame,
   Home,
   Pause,
@@ -96,19 +98,71 @@ export const MAPS: readonly (readonly [number, number, number, number][] )[] = [
     [600, 420, 110, 160],
     [890, 420, 110, 160],
   ],
-  /* حلقه دفاعی */
+  /* حلقه دفاعی — با دهانه‌های باز در چهار گوشه تا تانک هرگز محصور نشود */
   [
-    [600, 200, 400, 60],
-    [600, 740, 400, 60],
-    [540, 260, 60, 480],
-    [1000, 260, 60, 480],
+    [680, 200, 240, 60],
+    [680, 740, 240, 60],
+    [540, 340, 60, 320],
+    [1000, 340, 60, 320],
   ],
 ];
 export let OBSTACLES: readonly [number, number, number, number][] = MAPS[0];
 
-/* تعویض نقشه از بیرون (بازی گروهی) — index در محدوده MAPS */
+/* محافظ «همیشه راه باز» — اتصال کامل فضای آزاد نقشه با flood-fill سنجیده می‌شود؛
+   نقشه‌ای که حتی بزرگ‌ترین موجود میدان (تانک، شعاع ۲۴) را در جزیره‌ای محصور کند
+   هرگز انتخاب نمی‌شود و نقشهٔ فعلی باقی می‌ماند. */
+const CLEAR_R = 24;
+function isMapFullyOpen(rects: readonly [number, number, number, number][]): boolean {
+  const CELL = 10;
+  const nx = Math.ceil(MAP_W / CELL);
+  const ny = Math.ceil(MAP_H / CELL);
+  const blocked = new Uint8Array(nx * ny);
+  for (let gy = 0; gy < ny; gy++) {
+    for (let gx = 0; gx < nx; gx++) {
+      const x = gx * CELL + CELL / 2;
+      const y = gy * CELL + CELL / 2;
+      for (const [ox, oy, ow, oh] of rects) {
+        const cx = clamp(x, ox, ox + ow);
+        const cy = clamp(y, oy, oy + oh);
+        const dx = x - cx;
+        const dy = y - cy;
+        if (dx * dx + dy * dy < CLEAR_R * CLEAR_R) {
+          blocked[gy * nx + gx] = 1;
+          break;
+        }
+      }
+    }
+  }
+  /* flood از نقطهٔ شروع پلیر (مرکز میدان، کمی پایین‌تر) */
+  const sx = Math.floor(MAP_W / 2 / CELL);
+  const sy = Math.floor((MAP_H / 2 + 160) / CELL);
+  const startIdx = sy * nx + sx;
+  if (blocked[startIdx]) return false;
+  const seen = new Uint8Array(nx * ny);
+  const stack: number[] = [startIdx];
+  seen[startIdx] = 1;
+  while (stack.length) {
+    const c = stack.pop() as number;
+    const cx = c % nx;
+    const cy = (c / nx) | 0;
+    if (cx + 1 < nx && !seen[c + 1] && !blocked[c + 1]) { seen[c + 1] = 1; stack.push(c + 1); }
+    if (cx > 0 && !seen[c - 1] && !blocked[c - 1]) { seen[c - 1] = 1; stack.push(c - 1); }
+    if (cy + 1 < ny && !seen[c + nx] && !blocked[c + nx]) { seen[c + nx] = 1; stack.push(c + nx); }
+    if (cy > 0 && !seen[c - nx] && !blocked[c - nx]) { seen[c - nx] = 1; stack.push(c - nx); }
+  }
+  let free = 0;
+  for (let i = 0; i < blocked.length; i++) if (!blocked[i]) free++;
+  let reach = 0;
+  for (let i = 0; i < seen.length; i++) if (seen[i]) reach++;
+  return reach === free;
+}
+
+/* تعویض نقشه از بیرون (بازی گروهی) — index در محدوده MAPS؛
+   محافظ اتصال: نقشهٔ محصورکننده پذیرفته نمی‌شود */
 export function setMap(idx: number): void {
-  OBSTACLES = MAPS[((idx % MAPS.length) + MAPS.length) % MAPS.length];
+  const cand = MAPS[((idx % MAPS.length) + MAPS.length) % MAPS.length];
+  if (cand !== OBSTACLES && !isMapFullyOpen(cand)) return;
+  OBSTACLES = cand;
 }
 export const PICKUP_COLORS: Record<Pickup["kind"], { solid: string; glow: string }> = {
   hp: { solid: "#3df07c", glow: "rgba(61,240,124,0.16)" },
@@ -389,6 +443,8 @@ export function FireOffline() {
   const [phase, setPhaseState] = useState<Phase>("menu");
   const [touchUI, setTouchUI] = useState(false);
   const [muted, setMuted] = useState(false);
+  /* حالت پاک موبایل — هنگام بازی هیچ نوشته‌ای روی صفحه نیست؛ فقط دکمه‌ها و نوار جان */
+  const [cleanHud, setCleanHud] = useState(false);
   const [best, setBest] = useState(0);
   const [banner, setBanner] = useState<{ title: string; sub?: string } | null>(null);
   const [hud, setHud] = useState({ hp: PLAYER_HP, score: 0, wave: 0, kills: 0, rapid: 0, shield: 0, homing: 0, mines: 0, isNewBest: false });
@@ -497,6 +553,8 @@ export function FireOffline() {
     const coarse = window.matchMedia?.("(pointer: coarse)")?.matches ?? false;
     touchRef.current = coarse;
     setTouchUI(coarse);
+    /* روی موبایل بازی با صفحهٔ پاک شروع می‌شود — بدون نوشتهٔ مزاحم */
+    if (coarse) setCleanHud(true);
     sfxRef.current = makeSfx();
     sfxRef.current.setMuted(mutedRef.current);
     worldRef.current = makeWorld();
@@ -1552,6 +1610,8 @@ export function FireOffline() {
   /* آیکون جهت درست برای دکمه بازگشت بسته به RTL */
   const BackIcon = lang === "fa" ? ChevronRight : ChevronLeft;
   const hpPct = clamp(hud.hp / PLAYER_HP, 0, 1);
+  /* حالت پاک: در حال بازی روی موبایل هیچ نوشته‌ای دیده نمی‌شود — فقط دکمه‌ها و نوار جان */
+  const hudHidden = cleanHud && phase === "playing";
 
   return (
     <div
@@ -1586,22 +1646,38 @@ export function FireOffline() {
               <BackIcon className="h-5 w-5" aria-hidden="true" />
             </a>
           </Button>
-          <div className="rounded-full border border-zinc-800 bg-zinc-950/80 px-3.5 py-1.5 backdrop-blur">
-            <p className="flex items-center gap-1.5 text-xs font-bold text-orange-300">
-              <Flame className="h-3.5 w-3.5" aria-hidden="true" />
-              {f.menuTitle}
-            </p>
-          </div>
+          {!hudHidden && (
+            <div className="rounded-full border border-zinc-800 bg-zinc-950/80 px-3.5 py-1.5 backdrop-blur">
+              <p className="flex items-center gap-1.5 text-xs font-bold text-orange-300">
+                <Flame className="h-3.5 w-3.5" aria-hidden="true" />
+                {f.menuTitle}
+              </p>
+            </div>
+          )}
         </div>
 
         {phase !== "menu" && (
           <div className="pointer-events-auto flex items-center gap-1.5">
-            <span className="rounded-full border border-zinc-800 bg-zinc-950/80 px-3 py-1.5 text-xs font-bold text-zinc-200 backdrop-blur">
-              {f.wave} <b className="text-orange-300">{numFmt(Math.max(1, hud.wave))}</b>
-            </span>
-            <span className="rounded-full border border-zinc-800 bg-zinc-950/80 px-3 py-1.5 text-xs font-bold text-zinc-200 backdrop-blur">
-              {f.score} <b className="text-amber-300">{numFmt(hud.score)}</b>
-            </span>
+            {!hudHidden && (
+              <>
+                <span className="rounded-full border border-zinc-800 bg-zinc-950/80 px-3 py-1.5 text-xs font-bold text-zinc-200 backdrop-blur">
+                  {f.wave} <b className="text-orange-300">{numFmt(Math.max(1, hud.wave))}</b>
+                </span>
+                <span className="rounded-full border border-zinc-800 bg-zinc-950/80 px-3 py-1.5 text-xs font-bold text-zinc-200 backdrop-blur">
+                  {f.score} <b className="text-amber-300">{numFmt(hud.score)}</b>
+                </span>
+              </>
+            )}
+            {/* حالت پاک موبایل — خاموش/روشن کردن نوشته‌ها */}
+            <Button
+              onClick={() => setCleanHud((v) => !v)}
+              size="icon"
+              aria-label={cleanHud ? f.cleanOff : f.cleanOn}
+              title={cleanHud ? f.cleanOff : f.cleanOn}
+              className="h-10 w-10 rounded-full border border-zinc-800 bg-zinc-950/80 text-zinc-300 backdrop-blur hover:bg-zinc-800 hover:text-zinc-100"
+            >
+              {cleanHud ? <EyeOff className="h-4.5 w-4.5" aria-hidden="true" /> : <Eye className="h-4.5 w-4.5" aria-hidden="true" />}
+            </Button>
             <Button
               onClick={toggleMute}
               size="icon"
@@ -1629,23 +1705,25 @@ export function FireOffline() {
           style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
         >
           <div className="flex w-full max-w-md flex-col gap-1.5 rounded-2xl border border-zinc-800 bg-zinc-950/70 px-4 py-2.5 backdrop-blur">
-            <div className="flex items-center justify-between text-[11px] font-bold text-zinc-400">
-              <span>
-                {f.best}: <b className="text-amber-300">{numFmt(Math.max(best, hud.score))}</b>
-              </span>
-              {hud.rapid > 0 && (
-                <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-amber-300">★ {numFmt(hud.rapid)}</span>
-              )}
-              {hud.shield > 0 && (
-                <span className="rounded-full bg-sky-500/15 px-2 py-0.5 text-sky-300">⛨ {numFmt(hud.shield)}</span>
-              )}
-              {hud.homing > 0 && (
-                <span className="rounded-full bg-orange-500/15 px-2 py-0.5 text-orange-300">🚀 {numFmt(hud.homing)}</span>
-              )}
-              {hud.mines > 0 && (
-                <span className="rounded-full bg-rose-500/15 px-2 py-0.5 text-rose-300">💣 {numFmt(hud.mines)}</span>
-              )}
-            </div>
+            {!hudHidden && (
+              <div className="flex items-center justify-between text-[11px] font-bold text-zinc-400">
+                <span>
+                  {f.best}: <b className="text-amber-300">{numFmt(Math.max(best, hud.score))}</b>
+                </span>
+                {hud.rapid > 0 && (
+                  <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-amber-300">★ {numFmt(hud.rapid)}</span>
+                )}
+                {hud.shield > 0 && (
+                  <span className="rounded-full bg-sky-500/15 px-2 py-0.5 text-sky-300">⛨ {numFmt(hud.shield)}</span>
+                )}
+                {hud.homing > 0 && (
+                  <span className="rounded-full bg-orange-500/15 px-2 py-0.5 text-orange-300">🚀 {numFmt(hud.homing)}</span>
+                )}
+                {hud.mines > 0 && (
+                  <span className="rounded-full bg-rose-500/15 px-2 py-0.5 text-rose-300">💣 {numFmt(hud.mines)}</span>
+                )}
+              </div>
+            )}
             <div className="h-2.5 w-full overflow-hidden rounded-full bg-zinc-800">
               <div
                 className={`h-full rounded-full transition-[width] duration-150 ${hpPct > 0.5 ? "bg-emerald-500" : hpPct > 0.25 ? "bg-amber-500" : "bg-rose-500"}`}
@@ -1656,8 +1734,8 @@ export function FireOffline() {
         </div>
       )}
 
-      {/* بنر موج */}
-      {banner && phase === "playing" && (
+      {/* بنر موج — در حالت پاک موبایل پنهان می‌شود */}
+      {banner && phase === "playing" && !hudHidden && (
         <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
           <div className="animate-pulse rounded-2xl border border-orange-500/40 bg-zinc-950/80 px-8 py-4 text-center backdrop-blur">
             <p className="text-2xl font-black text-orange-300">{banner.title}</p>

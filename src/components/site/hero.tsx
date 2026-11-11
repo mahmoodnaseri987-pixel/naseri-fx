@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { useLang } from "@/components/site/language-provider";
+import { ClockDate } from "@/components/site/clock-date";
 import { pickText } from "@/lib/site-texts";
 import type { SiteContentMap } from "@/lib/types";
 import { Download } from "lucide-react";
@@ -83,6 +84,11 @@ export function Hero({ content = {}, bannerUrl }: HeroProps) {
           >
             {pickText(content, `hero_subtitle_${lang}`, t.hero.subtitle)}
           </motion.p>
+
+          {/* ساعت زنده و تاریخ (شمسی/میلادی) */}
+          <motion.div variants={item} className="mt-7">
+            <ClockDate />
+          </motion.div>
 
           <motion.div
             variants={item}

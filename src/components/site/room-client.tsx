@@ -307,8 +307,21 @@ export function RoomClient({ code }: { code: string }) {
         </div>
 
         {/* بازیکنان */}
-        <h2 className="mt-8 text-sm font-bold text-zinc-400">
-          {r.playersTitle} ({numFmt(st.members.length)}/{numFmt(st.room.maxPlayers)})
+        <h2 className="mt-8 flex flex-wrap items-center gap-2 text-sm font-bold text-zinc-400">
+          <span>
+            {r.playersTitle} ({numFmt(st.members.length)}/{numFmt(st.room.maxPlayers)})
+          </span>
+          {/* گروه سنی اتاق — سؤال‌های چالش سرعتی و جدول متناسب با آن انتخاب می‌شوند */}
+          {st.room.ageGroup === "kid" && (
+            <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-300">
+              {a.roomAgeKid}
+            </span>
+          )}
+          {st.room.ageGroup === "pro" && (
+            <span className="rounded-full border border-rose-500/40 bg-rose-500/10 px-2 py-0.5 text-[10px] font-bold text-rose-300">
+              {a.roomAgePro}
+            </span>
+          )}
         </h2>
         <ul className="mt-3 grid gap-2.5 sm:grid-cols-2">
           {st.members.map((m) => (

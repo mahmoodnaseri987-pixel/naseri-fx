@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { ensureSetup } from "@/lib/public-data";
 import { memberGuard } from "@/lib/member-auth";
 import type { Prisma } from "@prisma/client";
-import { BOT_GAMES, BOT_NAMES, BOT_PREFIX, MIN_PLAYERS, computePhase, pickQuestions, scoreFor } from "@/lib/arena-game";
+import { BOT_GAMES, BOT_NAMES, BOT_PREFIX, MIN_PLAYERS, computePhase, normalizeAgeGroup, pickQuestions, scoreFor } from "@/lib/arena-game";
 import {
   MAX_BOOSTS,
   NABARD_GAME_SLUG,
@@ -49,6 +49,24 @@ import {
   submitPicGuess,
 } from "@/lib/pic-engine";
 import { parseState, persistFireState } from "@/lib/arena-live";
+
+/** خواندن امن فرادادهٔ اتاق (مثل گروه سنی) از JSON خام state — قبل از شروع بازی */
+function safeStateMeta(raw: string): { ageGroup?: unknown } {
+  try {
+    const data = JSON.parse(raw);
+    return data && typeof data === "object" ? (data as { ageGroup?: unknown }) : {};
+  } catch {
+    return {};
+  }
+}
+
+/** گروه سنی مؤثر اتاق — ستون ageGroup اتاق مرجع است؛ برای اتاق‌های قدیمی
+    که قبل از این ستون ساخته شده‌اند، مقدار داخل state اگر صریح باشد ترجیح می‌شود. */
+function roomAgeGroup(room: { ageGroup: string; state: string }) {
+  const meta = safeStateMeta(room.state);
+  if (meta.ageGroup !== undefined) return normalizeAgeGroup(meta.ageGroup);
+  return normalizeAgeGroup(room.ageGroup);
+}
 
 export async function POST(
   req: NextRequest,
@@ -440,6 +458,7 @@ export async function POST(
       }
       const jState = createJadvalState(
         room.members.map((m) => ({ memberId: m.memberId, name: m.name })),
+        roomAgeGroup(room), // جدول متناسب با گروه سنی انتخاب می‌شود
       );
       const namesOf = (team: JadvalTeam): string =>
         room.members
@@ -823,7 +842,9 @@ export async function POST(
     if (!room.members.every((m) => m.isReady)) {
       return NextResponse.json({ error: "not ready" }, { status: 409 });
     }
-    const state = { startedAtMs: Date.now() + 3000, qs: pickQuestions() }; // ۳ ثانیه شمارش معکوس
+    /* گروه سنی اتاق از زمان ساخت اتاق حفظ شده است — سؤال‌ها متناسب با آن انتخاب می‌شوند */
+    const ageGroup = roomAgeGroup(room);
+    const state = { startedAtMs: Date.now() + 3000, qs: pickQuestions(10, ageGroup) }; // ۳ ثانیه شمارش معکوس
     await db.$transaction([
       db.room.update({
         where: { id: room.id },
@@ -878,11 +899,13 @@ export async function POST(
   if (type === "leave") {
     await db.roomMember.delete({ where: { id: me.id } });
     const remaining = room.members.filter((m) => m.memberId !== me.memberId);
-    if (remaining.length === 0) {
+    const humansLeft = remaining.filter((m) => !m.memberId.startsWith(BOT_PREFIX));
+    if (humansLeft.length === 0) {
+      /* اتاق فقط با بازیکن واقعی معنا دارد — با رفتن آخرین انسان، اتاق (به همراه ربات‌ها) تخلیه می‌شود */
       await db.room.delete({ where: { id: room.id } });
     } else if (room.hostId === me.memberId) {
-      /* میزبان رفت → قدیمی‌ترین عضو میزبان می‌شود */
-      const next = [...remaining].sort((a, b) => a.joinedAt.getTime() - b.joinedAt.getTime())[0];
+      /* میزبان رفت → قدیمی‌ترین عضوِ انسانی میزبان می‌شود — ربات هرگز میزبان نمی‌شود */
+      const next = [...humansLeft].sort((a, b) => a.joinedAt.getTime() - b.joinedAt.getTime())[0];
       await db.$transaction([
         db.room.update({ where: { id: room.id }, data: { hostId: next.memberId } }),
         db.roomMember.update({ where: { id: next.id }, data: { isHost: true } }),
@@ -900,7 +923,15 @@ export async function POST(
       return NextResponse.json({ error: "not host" }, { status: 403 });
     }
     await db.$transaction([
-      db.room.update({ where: { id: room.id }, data: { status: "lobby", state: "{}" } }),
+      db.room.update({
+        where: { id: room.id },
+        /* گروه سنی اتاق حفظ می‌شود تا «بازی دوباره» با همان سؤال‌های سنی برگزار شود */
+        data: {
+          status: "lobby",
+          ageGroup: roomAgeGroup(room), // گروه سنی انتخابی میزبان در «مسابقه دوباره» هم می‌ماند
+          state: JSON.stringify({ ageGroup: roomAgeGroup(room) }),
+        },
+      }),
       db.roomMember.updateMany({ where: { roomId: room.id }, data: { score: 0, isReady: false, fireInput: "{}" } }),
       db.roomAnswer.deleteMany({ where: { roomId: room.id } }),
     ]);

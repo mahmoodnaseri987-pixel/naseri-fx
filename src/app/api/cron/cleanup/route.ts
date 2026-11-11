@@ -6,10 +6,9 @@ export const maxDuration = 60;
 
 /* ================================================================
    پاک‌سازی خودکار — روزانه با Vercel Cron (see vercel.json)
-   رشد بی‌کران جدول‌ها را مهار می‌کند تا حجم دیتابیس نئون از سقف ۱
-   گیگابایت پلن رایگان عبور نکند:
-     • پیام‌های چت قدیمی‌تر از ۷ روز
-     • اتاق‌های تمام‌شده با بیش از ۲۴ ساعت بی‌ فعالیتی
+   زمان اجرا: ۲۰:۳۰ UTC = ۰۰:۳۰ به وقت تهران — درست در پایان هر روز شمسی:
+     • همهٔ پیام‌های چت — پاک‌سازی کامل پایان روز تا فضا پر نشود
+     • اتاق‌های تمام‌شده که تکرار نشدند — بعد از ۱۵ دقیقه تخلیه
        (اعضا و پاسخ‌ها با حذف آبشاری پاک می‌شوند)
      • اتاق‌های رهاشدهٔ هر وضعیتی با بیش از ۳ روز بی‌فعالیتی
      • رکوردهای اجرای بازی قدیمی‌تر از ۱۲۰ روز
@@ -18,8 +17,7 @@ export const maxDuration = 60;
    هدر را خودکار می‌فرستد). بدون تعریف سِکِرت، فراخوانی آزاد است.
    ================================================================ */
 
-const CHAT_RETAIN_DAYS = 7;
-const FINISHED_ROOM_RETAIN_HOURS = 24;
+const FINISHED_ROOM_RETAIN_MINUTES = 15; // اتاق تمام‌شده که تکرار نشد — بعد از ۱۵ دقیقه تخلیه
 const STALE_ROOM_RETAIN_DAYS = 3;
 const PLAY_LOG_RETAIN_DAYS = 120;
 
@@ -33,14 +31,14 @@ export async function GET(req: NextRequest) {
   }
 
   const now = Date.now();
-  const chatCutoff = new Date(now - CHAT_RETAIN_DAYS * 86_400_000);
-  const finishedCutoff = new Date(now - FINISHED_ROOM_RETAIN_HOURS * 3_600_000);
+  const finishedCutoff = new Date(now - FINISHED_ROOM_RETAIN_MINUTES * 60_000);
   const staleCutoff = new Date(now - STALE_ROOM_RETAIN_DAYS * 86_400_000);
   const playCutoff = new Date(now - PLAY_LOG_RETAIN_DAYS * 86_400_000);
 
   try {
     const [chat, finishedRooms, staleRooms, plays] = await Promise.all([
-      db.chatMessage.deleteMany({ where: { createdAt: { lt: chatCutoff } } }),
+      /* پایان هر روز — همهٔ پیام‌های چت (لابی و اتاق‌ها و تیم‌ها) پاک می‌شوند */
+      db.chatMessage.deleteMany({}),
       db.room.deleteMany({
         where: { status: "finished", lastActivity: { lt: finishedCutoff } },
       }),

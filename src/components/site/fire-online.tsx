@@ -43,6 +43,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Copy,
+  Eye,
+  EyeOff,
   Flame,
   LogOut,
   Minus,
@@ -311,6 +313,8 @@ export function FireOnline() {
   const [banner, setBanner] = useState<string | null>(null);
   const [touchUI, setTouchUI] = useState(false);
   const [muted, setMuted] = useState(false);
+  /* حالت پاک موبایل — هنگام بازی هیچ نوشته‌ای روی صفحه نیست؛ فقط دکمه‌ها و نوار جان */
+  const [cleanHud, setCleanHud] = useState(false);
   /* پینگ شبکه برای نمایش در HUD بازی — عیب‌یابی زندهٔ کیفیت اتصال */
   const [netHud, setNetHud] = useState<{ rtt: number; jit: number; mode: "p2p" | "relay" } | null>(null);
   const mutedStateRef = useRef(false);
@@ -1601,6 +1605,8 @@ export function FireOnline() {
     const coarse = window.matchMedia?.("(pointer: coarse)")?.matches ?? false;
     touchRef.current = coarse;
     setTouchUI(coarse);
+    /* روی موبایل بازی با صفحهٔ پاک شروع می‌شود — بدون نوشتهٔ مزاحم */
+    if (coarse) setCleanHud(true);
     sfxRef.current = makeSfx();
     sfxRef.current.setMuted(window.localStorage.getItem("fire-offline-muted") === "1");
     /* قلاب اشکال‌زدایی فقط-خواندنی برای پشتیبانی از راه دور */
@@ -2572,6 +2578,8 @@ export function FireOnline() {
 
   const BackIcon = lang === "fa" ? ChevronRight : ChevronLeft;
   const hpPct = clamp(hud.hp / PLAYER_HP, 0, 1);
+  /* حالت پاک: در حال بازی روی موبایل هیچ نوشته‌ای دیده نمی‌شود — فقط دکمه‌ها و نوار جان */
+  const hudHidden = cleanHud && step === "playing";
 
   /* ---------- رابط کاربری ---------- */
   return (
@@ -2605,31 +2613,47 @@ export function FireOnline() {
           >
             <LogOut className="h-5 w-5" aria-hidden="true" />
           </Button>
-          <div className="rounded-full border border-zinc-800 bg-zinc-950/80 px-3.5 py-1.5 backdrop-blur">
-            <p className="flex items-center gap-1.5 text-xs font-bold text-orange-300">
-              <Flame className="h-3.5 w-3.5" aria-hidden="true" />
-              {f.menuTitle}
-            </p>
-          </div>
+          {!hudHidden && (
+            <div className="rounded-full border border-zinc-800 bg-zinc-950/80 px-3.5 py-1.5 backdrop-blur">
+              <p className="flex items-center gap-1.5 text-xs font-bold text-orange-300">
+                <Flame className="h-3.5 w-3.5" aria-hidden="true" />
+                {f.menuTitle}
+              </p>
+            </div>
+          )}
         </div>
 
         {step === "playing" && (
           <div className="pointer-events-auto flex flex-wrap items-center justify-end gap-1.5">
-            <span className="rounded-full border border-zinc-800 bg-zinc-950/80 px-3 py-1.5 text-xs font-bold backdrop-blur">
-              <b className="text-rose-400">{numFmt(hud.sr)}</b>
-              <span className="mx-1.5 text-zinc-500">—</span>
-              <b className="text-sky-400">{numFmt(hud.sb)}</b>
-            </span>
-            <span className="rounded-full border border-zinc-800 bg-zinc-950/80 px-3 py-1.5 text-xs font-bold text-zinc-200 backdrop-blur">
-              ⏱ {numFmt(Math.floor(hud.tm / 60))}:{numFmt(hud.tm % 60).padStart(2, "۰")}
-            </span>
-            {netHud && (
-              <span className="rounded-full border border-zinc-800 bg-zinc-950/80 px-3 py-1.5 text-xs font-bold backdrop-blur" dir="ltr">
-                ⚡ <b className={netHud.rtt < 90 ? "text-emerald-400" : netHud.rtt < 200 ? "text-amber-400" : "text-rose-400"}>{numFmt(netHud.rtt)}</b>
-                <span className="text-zinc-500">ms</span>
-                <span className={`ml-1 text-[10px] font-black ${netHud.mode === "p2p" ? "text-emerald-300" : "text-amber-300"}`}>· {netHud.mode === "p2p" ? o.netP2p : o.netRelay}</span>
-              </span>
+            {!hudHidden && (
+              <>
+                <span className="rounded-full border border-zinc-800 bg-zinc-950/80 px-3 py-1.5 text-xs font-bold backdrop-blur">
+                  <b className="text-rose-400">{numFmt(hud.sr)}</b>
+                  <span className="mx-1.5 text-zinc-500">—</span>
+                  <b className="text-sky-400">{numFmt(hud.sb)}</b>
+                </span>
+                <span className="rounded-full border border-zinc-800 bg-zinc-950/80 px-3 py-1.5 text-xs font-bold text-zinc-200 backdrop-blur">
+                  ⏱ {numFmt(Math.floor(hud.tm / 60))}:{numFmt(hud.tm % 60).padStart(2, "۰")}
+                </span>
+                {netHud && (
+                  <span className="rounded-full border border-zinc-800 bg-zinc-950/80 px-3 py-1.5 text-xs font-bold backdrop-blur" dir="ltr">
+                    ⚡ <b className={netHud.rtt < 90 ? "text-emerald-400" : netHud.rtt < 200 ? "text-amber-400" : "text-rose-400"}>{numFmt(netHud.rtt)}</b>
+                    <span className="text-zinc-500">ms</span>
+                    <span className={`ml-1 text-[10px] font-black ${netHud.mode === "p2p" ? "text-emerald-300" : "text-amber-300"}`}>· {netHud.mode === "p2p" ? o.netP2p : o.netRelay}</span>
+                  </span>
+                )}
+              </>
             )}
+            {/* حالت پاک موبایل — خاموش/روشن کردن نوشته‌ها */}
+            <Button
+              onClick={() => setCleanHud((v) => !v)}
+              size="icon"
+              aria-label={cleanHud ? o.cleanOff : o.cleanOn}
+              title={cleanHud ? o.cleanOff : o.cleanOn}
+              className="h-10 w-10 rounded-full border border-zinc-800 bg-zinc-950/80 text-zinc-300 backdrop-blur hover:bg-zinc-800 hover:text-zinc-100"
+            >
+              {cleanHud ? <EyeOff className="h-5 w-5" aria-hidden="true" /> : <Eye className="h-5 w-5" aria-hidden="true" />}
+            </Button>
             <Button
               onClick={toggleMute}
               size="icon"
@@ -2642,8 +2666,8 @@ export function FireOnline() {
         )}
       </div>
 
-      {/* فید حذف */}
-      {step === "playing" && killFeed.length > 0 && (
+      {/* فید حذف — در حالت پاک پنهان */}
+      {step === "playing" && !hudHidden && killFeed.length > 0 && (
         <div className="pointer-events-none absolute inset-x-0 top-16 z-10 flex flex-col items-center gap-1">
           {killFeed.map((kf, i) => (
             <span key={`${i}-${kf}`} className="rounded-full bg-zinc-950/70 px-3 py-1 text-[11px] font-bold text-zinc-300 backdrop-blur">
@@ -2660,16 +2684,18 @@ export function FireOnline() {
           style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
         >
           <div className="flex w-full max-w-md flex-col gap-1.5 rounded-2xl border border-zinc-800 bg-zinc-950/70 px-4 py-2.5 backdrop-blur">
-            <div className="flex items-center justify-between text-[11px] font-bold text-zinc-400">
-              <span className="flex flex-wrap gap-1.5">
-                {hud.sh > 0 && <span className="rounded-full bg-sky-500/15 px-2 py-0.5 text-sky-300">⛨ {numFmt(hud.sh)}</span>}
-                {hud.hm > 0 && <span className="rounded-full bg-orange-500/15 px-2 py-0.5 text-orange-300">🚀 {numFmt(hud.hm)}</span>}
-                {hud.mn > 0 && <span className="rounded-full bg-rose-500/15 px-2 py-0.5 text-rose-300">💣 {numFmt(hud.mn)}</span>}
-              </span>
-              <span>
-                {o.ruleLine.replace("{n}", numFmt(KILL_TARGET)).replace("{s}", numFmt(5))}
-              </span>
-            </div>
+            {!hudHidden && (
+              <div className="flex items-center justify-between text-[11px] font-bold text-zinc-400">
+                <span className="flex flex-wrap gap-1.5">
+                  {hud.sh > 0 && <span className="rounded-full bg-sky-500/15 px-2 py-0.5 text-sky-300">⛨ {numFmt(hud.sh)}</span>}
+                  {hud.hm > 0 && <span className="rounded-full bg-orange-500/15 px-2 py-0.5 text-orange-300">🚀 {numFmt(hud.hm)}</span>}
+                  {hud.mn > 0 && <span className="rounded-full bg-rose-500/15 px-2 py-0.5 text-rose-300">💣 {numFmt(hud.mn)}</span>}
+                </span>
+                <span>
+                  {o.ruleLine.replace("{n}", numFmt(KILL_TARGET)).replace("{s}", numFmt(5))}
+                </span>
+              </div>
+            )}
             <div className="h-2.5 w-full overflow-hidden rounded-full bg-zinc-800">
               <div
                 className={`h-full rounded-full transition-[width] duration-150 ${hpPct > 0.5 ? "bg-emerald-500" : hpPct > 0.25 ? "bg-amber-500" : "bg-rose-500"}`}
@@ -2689,8 +2715,8 @@ export function FireOnline() {
         </div>
       )}
 
-      {/* بنر */}
-      {banner && step === "playing" && (
+      {/* بنر — در حالت پاک پنهان */}
+      {banner && step === "playing" && !hudHidden && (
         <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
           <div className="rounded-2xl border border-orange-500/40 bg-zinc-950/80 px-8 py-4 text-center backdrop-blur">
             <p className="text-2xl font-black text-orange-300">{banner}</p>

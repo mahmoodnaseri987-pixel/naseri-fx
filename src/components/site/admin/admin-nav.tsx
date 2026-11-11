@@ -10,7 +10,9 @@ import {
   KeyRound,
   LayoutDashboard,
   MailQuestion,
+  MessagesSquare,
   Phone,
+  ShieldCheck,
   Smartphone,
   Swords,
   Type,
@@ -23,6 +25,7 @@ export type SectionId =
   | "apps"
   | "games"
   | "arena"
+  | "chat"
   | "members"
   | "resets"
   | "boxes"
@@ -30,7 +33,8 @@ export type SectionId =
   | "texts"
   | "appearance"
   | "contacts"
-  | "security";
+  | "security"
+  | "guard";
 
 export const ADMIN_SECTIONS: {
   id: SectionId;
@@ -41,6 +45,7 @@ export const ADMIN_SECTIONS: {
   { id: "apps", label: "اپلیکیشن‌ها", icon: Smartphone },
   { id: "games", label: "بازی‌ها", icon: Gamepad2 },
   { id: "arena", label: "آرنا و اتاق‌ها", icon: Swords },
+  { id: "chat", label: "پاک‌سازی چت‌ها", icon: MessagesSquare },
   { id: "members", label: "اعضای سایت", icon: Users },
   { id: "resets", label: "بازیابی رمز اعضا", icon: MailQuestion },
   { id: "boxes", label: "باکس‌های محتوا", icon: Boxes },
@@ -49,4 +54,5 @@ export const ADMIN_SECTIONS: {
   { id: "appearance", label: "بنر، لوگو و موشن", icon: Clapperboard },
   { id: "contacts", label: "اطلاعات تماس", icon: Phone },
   { id: "security", label: "امنیت", icon: KeyRound },
+  { id: "guard", label: "سلامت و بازسازی", icon: ShieldCheck },
 ];

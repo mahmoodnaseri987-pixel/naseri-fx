@@ -3,6 +3,7 @@
    و نباید هیچ‌گاه در بستهٔ کلاینت ظاهر شود. کلاینت فقط jadval-shared.ts. */
 
 import puzzleData from "@/data/jadval-puzzles.json";
+import { type AgeGroup, normalizeAgeGroup } from "@/lib/arena-game";
 import {
   JADVAL_DRAW_BONUS,
   JADVAL_LOSE_BONUS,
@@ -45,9 +46,19 @@ export function jadvalPuzzleCount(): number {
   return PUZZLES.length;
 }
 
-/** جدول تصادفی — تا می‌تواند همان جدول قبلی اتاق را تکرار نکند */
-export function pickJadvalPuzzle(excludeId?: string): RawPuzzle {
-  const pool = PUZZLES.length > 1 && excludeId ? PUZZLES.filter((p) => p.id !== excludeId) : PUZZLES;
+/**
+ * جدول تصادفی — تا می‌تواند همان جدول قبلی اتاق را تکرار نکند.
+ * متناسب با گروه سنی: کودکان ← جدول‌های سبک‌تر (واژه‌های کمتر)،
+ * حرفه‌ای‌ها ← جدول‌های سنگین‌تر (واژه‌های بیشتر)، بزرگسالان ← همه.
+ */
+export function pickJadvalPuzzle(excludeId?: string, age: AgeGroup = "adult"): RawPuzzle {
+  let pool: RawPuzzle[] = PUZZLES;
+  if (age !== "adult") {
+    const sorted = [...PUZZLES].sort((a, b) => a.words.length - b.words.length);
+    const third = Math.max(1, Math.floor(sorted.length / 3));
+    pool = age === "kid" ? sorted.slice(0, third) : sorted.slice(-third);
+  }
+  if (pool.length > 1 && excludeId) pool = pool.filter((p) => p.id !== excludeId);
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
@@ -57,14 +68,18 @@ function getPuzzle(id: string): RawPuzzle | null {
 
 /* ---------- ساخت وضعیت شروع ---------- */
 
-export function createJadvalState(members: { memberId: string; name: string }[]): JadvalRoomState {
+export function createJadvalState(
+  members: { memberId: string; name: string }[],
+  ageRaw: unknown = "adult",
+): JadvalRoomState {
+  const age: AgeGroup = normalizeAgeGroup(ageRaw);
   /* تیم‌بندی متوازن: به ترتیب ورود، یکی‌درمیان */
   const teams: Record<string, JadvalTeam> = {};
   const ordered = [...members].sort((a, b) => a.memberId.localeCompare(b.memberId));
   ordered.forEach((m, idx) => {
     teams[m.memberId] = idx % 2 === 0 ? JADVAL_TEAM_A : JADVAL_TEAM_B;
   });
-  const puzzle = pickJadvalPuzzle();
+  const puzzle = pickJadvalPuzzle(undefined, age);
   return {
     game: "jadval-race",
     startedAtMs: Date.now() + JADVAL_START_DELAY_MS,

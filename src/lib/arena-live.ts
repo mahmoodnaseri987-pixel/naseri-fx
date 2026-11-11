@@ -191,6 +191,7 @@ export type RoomSnapshot = {
     status: string;
     hostId: string;
     maxPlayers: number;
+    ageGroup: string; // گروه سنی اتاق — نمایش و انتخاب سؤال‌ها
   };
   members: SnapMember[];
   answeredRound: number; // شماره سؤالی که answered به آن تعلق دارد
@@ -453,12 +454,13 @@ async function buildSnapshot(code: string): Promise<RoomSnapshot | null> {
     status = "finished";
   }
 
-  /* میزبانِ غایب → قدیمی‌ترین عضو آنلاین میزبان می‌شود تا اتاق قفل نشود */
+  /* میزبانِ غایب → قدیمی‌ترین عضوِ انسانیِ آنلاین میزبان می‌شود تا اتاق قفل نشود
+     (ربات هرگز میزبان نمی‌شود — حتی اگر تنها عضو آنلاینِ حاضر باشد) */
   if (status === "lobby") {
     const host = room.members.find((m) => m.memberId === hostId);
     if (!host || now - host.lastSeenAt.getTime() > 60_000) {
       const candidate = room.members
-        .filter((m) => now - m.lastSeenAt.getTime() <= ONLINE_MS)
+        .filter((m) => !isBotId(m.memberId) && now - m.lastSeenAt.getTime() <= ONLINE_MS)
         .sort((a, b) => a.joinedAt.getTime() - b.joinedAt.getTime())[0];
       if (candidate && candidate.memberId !== hostId) {
         await db.$transaction([
@@ -540,6 +542,7 @@ async function buildSnapshot(code: string): Promise<RoomSnapshot | null> {
       status,
       hostId,
       maxPlayers: room.maxPlayers,
+      ageGroup: room.ageGroup,
     },
     members,
     answeredRound,
@@ -687,6 +690,7 @@ export function viewFromSnapshot(
       status: room.status,
       hostId: room.hostId,
       maxPlayers: room.maxPlayers,
+      ageGroup: room.ageGroup,
     },
     members,
     game,

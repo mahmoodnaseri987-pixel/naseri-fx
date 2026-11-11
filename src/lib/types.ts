@@ -239,6 +239,7 @@ export type ArenaStateResponse = {
     status: string;
     hostId: string;
     maxPlayers: number;
+    ageGroup: string; // گروه سنی اتاق — سؤال‌ها متناسب با آن
   };
   members: ArenaMemberView[];
   game: ArenaGameView | null;

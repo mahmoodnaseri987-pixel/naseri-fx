@@ -3,16 +3,57 @@
    که هم استریم SSE و هم مسیرهای GET از آن می‌خوانند. */
 
 import { db } from "@/lib/db";
+import { BOT_PREFIX } from "@/lib/arena-game";
 import { getRoomSnapshot, touchPresence, viewFromSnapshot } from "@/lib/arena-live";
 import type { ArenaStateResponse } from "@/lib/types";
 
 export { ONLINE_MS, parseState } from "@/lib/arena-live";
 export type { ArenaState } from "@/lib/arena-live";
 
-/** حذف اتاق‌های بی‌فعالیت بیش از ۴۵ دقیقه (به همراه اعضا و پاسخ‌ها — آبشاری) */
+/**
+ * پاک‌سازی دوره‌ای اتاق‌ها — روی هر خواندن فهرست اتاق‌ها و ساخت اتاق اجرا می‌شود:
+ *  ۱) اتاق تمام‌شده که «بازی دوباره» نشد — بعد از ۱۰ دقیقه تخلیه می‌شود
+ *  ۲) اتاق بی‌فعالیت بیش از ۴۵ دقیقه — کامل حذف می‌شود (اعضا و پاسخ‌ها آبشاری)
+ *  ۳) عضو انسانیِ آفلاین — بعد از ۳ دقیقه بی‌حضوری خودکار از اتاق خارج می‌شود؛
+ *     فقط بازیکنان آنلاین اتاق را تصرف می‌کنند (ربات‌ها مستثنا هستند)
+ *  ۴) اتاق بدون هیچ عضو انسانی (فقط ربات مانده) — تخلیه می‌شود؛
+ *     هیچ اتاقی به میزبان‌بودن ربات اعتماد نمی‌کند
+ */
 export async function housekeeping(): Promise<void> {
-  const cutoff = new Date(Date.now() - 45 * 60 * 1000);
-  await db.room.deleteMany({ where: { lastActivity: { lt: cutoff } } });
+  const now = Date.now();
+  await db.$transaction([
+    db.room.deleteMany({
+      where: { status: "finished", lastActivity: { lt: new Date(now - 10 * 60_000) } },
+    }),
+    db.room.deleteMany({ where: { lastActivity: { lt: new Date(now - 45 * 60_000) } } }),
+    db.roomMember.deleteMany({
+      where: {
+        lastSeenAt: { lt: new Date(now - 3 * 60_000) },
+        memberId: { not: { startsWith: BOT_PREFIX } },
+      },
+    }),
+  ]);
+
+  /* اتاق‌های بی‌مهمان یا فقط-رباتی — هیچ‌کدام حق ادامهٔ زندگی ندارند */
+  const rooms = await db.room.findMany({
+    where: { status: { in: ["lobby", "playing"] } },
+    select: {
+      id: true,
+      hostId: true,
+      members: { select: { memberId: true } },
+    },
+  });
+  const dead = rooms
+    .filter((r) => {
+      if (r.members.length === 0) return true;
+      if (r.members.every((m) => m.memberId.startsWith(BOT_PREFIX))) return true;
+      /* اتاقی که میزبانش ربات است (میراث رکوردهای قدیمی) هم تخلیه می‌شود */
+      return r.hostId.startsWith(BOT_PREFIX);
+    })
+    .map((r) => r.id);
+  if (dead.length > 0) {
+    await db.room.deleteMany({ where: { id: { in: dead } } });
+  }
 }
 
 /**
