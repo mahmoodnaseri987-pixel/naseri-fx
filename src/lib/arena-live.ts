@@ -271,10 +271,18 @@ const SNAPSHOT_TTL = 900; // اتاق منتظر / تمام‌شده — تغی�
 const SNAPSHOT_TTL_PLAY = 700; // کوییز در جریان — فازها چندثانیهای
 const SNAPSHOT_TTL_FAST = 400; // نبرد دایره‌ها در جریان — نوتِ میزبان ۱ثانیه
 
-const snapCache = new Map<
+/* کش اسنپ‌شات باید «یک نمونهٔ مشترک» بین همهٔ مسیرها باشد — Next.js کد lib را
+   برای هر مسیر جدا باندل می‌کند؛ اگر Map در ماژول باشد، هر مسیر کش خودش را
+   دارد و باطله‌کردن از مسیر اکشن به مسیر state/SSE نمی‌رسد (تاس کهنه دیده
+   می‌شود). با globalThis همهٔ باندل‌ها به یک Map می‌رسند. */
+const snapCache: Map<
   string,
   { at: number; ttl: number; p: Promise<RoomSnapshot | null> }
->();
+> = (() => {
+  const g = globalThis as { __naseriSnapCache?: Map<string, { at: number; ttl: number; p: Promise<RoomSnapshot | null> }> };
+  if (!g.__naseriSnapCache) g.__naseriSnapCache = new Map();
+  return g.__naseriSnapCache;
+})();
 
 async function buildSnapshot(code: string): Promise<RoomSnapshot | null> {
   const room = await db.room.findUnique({
@@ -651,6 +659,14 @@ async function buildSnapshot(code: string): Promise<RoomSnapshot | null> {
     fingerprint,
     computedAt: Date.now(),
   };
+}
+
+/** باطله‌کردن اسنپ‌شات کش‌شدهٔ اتاق — بعد از هر تغییر سمت سرور (اکشن بازیکن)
+    باید صدا زده شود تا مسیر state و جریان SSE همان لحظه دادهٔ تازه ببینند؛
+    وگرنه اسنپ‌شات کهنه تا ۷۰۰میلی‌ثانیه وضعیتِ قبل از اکشن را برمی‌گرداند
+    و کلاینت انگار «پرتاب/حرکت» را دیده و ندیده، دو بار واکنش نشان می‌دهد. */
+export function invalidateRoomSnapshot(code: string): void {
+  snapCache.delete(code);
 }
 
 /** اسنپ‌شات کش‌شده اتاق — همه اتصال‌های یک نمونه از یک کوئری مشترک می‌خوانند */

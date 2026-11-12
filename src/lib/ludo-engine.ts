@@ -100,14 +100,15 @@ export function createLudoState(members: { id: string; name: string }[]): LudoRo
 export function parseLudoState(raw: string): LudoRoomState | null {
   try {
     const d = JSON.parse(raw) as LudoRoomState & {
-      dice?: { v?: unknown; a?: unknown; b?: unknown } | null;
+      dice?: { v?: unknown; a?: unknown; b?: unknown; at?: unknown } | null;
     };
     /* مهاجرت از حالت قدیمی دو‌تاس ({a,b}) به یک‌تاس ({v}) — جمع دو تاس */
     if (d.dice !== null && d.dice !== undefined) {
+      const at = typeof d.dice.at === "number" ? { at: d.dice.at } : {};
       if (typeof d.dice.v === "number") {
-        d.dice = { v: Math.max(1, Math.min(6, Math.round(d.dice.v))) };
+        d.dice = { v: Math.max(1, Math.min(6, Math.round(d.dice.v))), ...at };
       } else if (typeof d.dice.a === "number" && typeof d.dice.b === "number") {
-        d.dice = { v: Math.max(2, Math.min(12, d.dice.a + d.dice.b)) };
+        d.dice = { v: Math.max(2, Math.min(12, d.dice.a + d.dice.b)), ...at };
       } else {
         d.dice = null;
       }
@@ -517,12 +518,12 @@ export function ludoTick(
     }
     if (!st.dice) {
       /* پرتاب تاس خودکار (مهلت انسان تمام شده یا نوبت ربات است) */
-      st.dice = rollDice();
+      st.seq += 1;
+      st.dice = { ...rollDice(), at: st.seq }; // «at» شناسهٔ پایدار این پرتاب برای کلاینت
       st.rolls += 1;
       st.deadline = isBotId(st.turnId)
         ? now + botDelay(st, LUDO_BOT_MOVE_MIN, LUDO_BOT_MOVE_VAR)
         : now + LUDO_MOVE_MS;
-      st.seq += 1;
       mutated = true;
       continue;
     }

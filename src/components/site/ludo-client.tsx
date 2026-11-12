@@ -31,6 +31,10 @@ import { useLang } from "@/components/site/language-provider";
 import { ChatPanel } from "@/components/site/chat-panel";
 import {
   LUDO_BASE_ANCHORS,
+  LUDO_BOT_MOVE_MIN,
+  LUDO_BOT_MOVE_VAR,
+  LUDO_BOT_ROLL_MIN,
+  LUDO_BOT_ROLL_VAR,
   LUDO_COLUMN,
   LUDO_COLUMN_START,
   LUDO_HOME_STEP,
@@ -64,9 +68,10 @@ import type { ArenaStateResponse } from "@/lib/types";
 const CELL = 40;
 const BOARD = CELL * 15;
 
-/* ریتم بازی — چرخش آهستهٔ تاس و مکث کافی بعد از هر پرتاب تا نوبت‌ها دیده شود */
-const ROLL_SPIN_MS = 1500; // مدت چرخش تاس (آهسته و قابل‌مشاهده)
-const SETTLE_MS = 950; // مکث بعد از فرود تاس — قبل از شروع حرکت‌ها
+/* ریتم بازی — تاس دقیقاً یک‌بار برای هر پرتاب می‌چرخد، روی عدد سرور می‌ایستد
+   و ۲ثانیه ثابت می‌ماند؛ بعد حرکت مهره‌ها دیده می‌شود و نوبت بعدی اعلام می‌گردد */
+const ROLL_SPIN_MS = 1400; // یک چرخش کامل برای هر پرتاب — نه بیشتر
+const SETTLE_MS = 2000; // مکث فرود — عدد حداقل ۲ثانیه روی زمین ثابت دیده می‌شود
 const STEP_MS = 430; // فاصلهٔ هر گام مهره — نرم و قابل‌مشاهده
 
 /** جای نشان صاحب پایگاه — روی نوار بیرونی هر پایگاه (درصد اندازهٔ تخته) */
@@ -376,39 +381,54 @@ export function LudoClient({
   const movable = useMemo(() => new Set(legal.map((a) => a.piece)), [legal]);
   const hasEnter = legal.some((a) => a.kind === "enter");
 
-  /* ---------- ریتم تاس: چرخش آهسته + مکث فرود — قبل از هر واکنشی ---------- */
-  const rollingRef = useRef(false);
+  /* ---------- ریتم تاس: دقیقاً یک چرخش برای هر پرتاب + مکث فرود ----------
+     کلید پرتاب، «at» سرور است (نه seq) — پس حرکت و پاس دیگر باعث چرخشِ
+     دوباره نمی‌شود؛ با برداشتن تاس از زمین هم چرخش نیمه‌کاره کامل
+     بازنشانی می‌شود تا تاس هرگز بی‌وقفه نچرخد و عدد نامشخص نماند. */
   const [rolling, setRolling] = useState(false);
   const [settling, setSettling] = useState(false);
+  const rollingRef = useRef(false);
   const clickRollRef = useRef(false); // پرتابِ دستی خودم — صدای تاس در کلیک پخش شده
-  const diceKey = l.dice ? `${l.dice.v}-${l.seq}` : "";
-  const lastDiceKey = useRef("");
-  const settleTimersRef = useRef<number[]>([]);
+  const rollId = l.dice ? `${l.dice.at ?? "x"}:${l.dice.v}` : "";
+  const lastRollIdRef = useRef("");
+  const diceTimersRef = useRef<number[]>([]);
+  const clearDiceTimers = useCallback(() => {
+    diceTimersRef.current.forEach((x) => window.clearTimeout(x));
+    diceTimersRef.current = [];
+  }, []);
+  const lastDiceVRef = useRef(6); // آخرین عدد زمین — بعد از برداشتن تاس هم تا پرتاب بعدی ثابت می‌ماند
+  if (l.dice) lastDiceVRef.current = l.dice.v;
   useEffect(() => {
-    if (!diceKey || lastDiceKey.current === diceKey) return;
-    lastDiceKey.current = diceKey;
-    const v = l.dice?.v ?? 0;
-    /* چرخش آهستهٔ تاس تا فرود روی عدد سرور، سپس مکث کامل تا همه عدد را ببینند */
-    if (!rollingRef.current) {
-      rollingRef.current = true;
-      setRolling(true);
+    if (!rollId) {
+      /* تاس از زمین برداشته شد (حرکت/پاس انجام شد) — هر چرخش یا مکثِ در جریان بسته می‌شود */
+      if (lastRollIdRef.current) {
+        lastRollIdRef.current = "";
+        rollingRef.current = false;
+        clearDiceTimers();
+        setRolling(false);
+        setSettling(false);
+      }
+      return;
     }
+    if (lastRollIdRef.current === rollId) return;
+    lastRollIdRef.current = rollId;
+    const v = l.dice?.v ?? 0;
+    /* یک چرخش یکتا تا فرود روی عدد سرور، سپس مکث کامل تا همه عدد را ببینند */
+    rollingRef.current = true;
+    setRolling(true);
+    setSettling(false);
     if (!clickRollRef.current) sfxDice();
     clickRollRef.current = false;
     const t1 = window.setTimeout(() => {
       rollingRef.current = false;
       setRolling(false);
       setSettling(true);
-      if (v === 6) window.setTimeout(() => sfxDing(), 350); // دینگ آوردن ۶
-      const t2 = window.setTimeout(() => setSettling(false), SETTLE_MS);
-      settleTimersRef.current.push(t2);
+      if (v === 6) diceTimersRef.current.push(window.setTimeout(() => sfxDing(), 350)); // دینگ آوردن ۶
+      diceTimersRef.current.push(window.setTimeout(() => setSettling(false), SETTLE_MS));
     }, ROLL_SPIN_MS);
-    settleTimersRef.current.push(t1);
-    return () => {
-      settleTimersRef.current.forEach((x) => window.clearTimeout(x));
-      settleTimersRef.current = [];
-    };
-  }, [diceKey]);
+    diceTimersRef.current.push(t1);
+    return clearDiceTimers;
+  }, [rollId, clearDiceTimers]);
 
   /* پاس خودکار وقتی هیچ حرکتی ممکن نیست — ولی فقط بعد از مکث فرود تاس،
      تا بازیکن عدد تاس را ببیند و نوبت جلوی چشمش رد نشود */
@@ -448,31 +468,23 @@ export function LudoClient({
   /* ---------- اکشن‌ها ---------- */
   const roll = useCallback(async () => {
     if (!myTurn || l.dice || rollingRef.current || l.finished) return;
-    rollingRef.current = true;
+    /* فقط پرچم صدای کلیک روشن می‌شود؛ چرخش تنها با تأیید سرور و یک‌بار
+       در اثرِ «کلید پرتاب» آغاز می‌شود — هیچ چرخش اضافه‌ای در کار نیست */
     clickRollRef.current = true;
-    setRolling(true);
     sfxDice();
     const ok = await sendAction({ type: "ludo_roll" });
-    if (!ok) {
-      rollingRef.current = false;
-      clickRollRef.current = false;
-      setRolling(false);
-      return;
-    }
-    /* پشتیبان — اگر پاسخ سرور گم شد، چرخش متوقف شود */
+    if (!ok) clickRollRef.current = false;
+    /* پشتیبان — اگر حالت سرور نرسید، پرچم صدا خودکار پاک شود */
     window.setTimeout(() => {
-      if (rollingRef.current) {
-        rollingRef.current = false;
-        setRolling(false);
-      }
-    }, ROLL_SPIN_MS + 1200);
+      clickRollRef.current = false;
+    }, 4000);
   }, [myTurn, l.dice, l.finished, sendAction]);
 
   const [shakeKey, setShakeKey] = useState<string | null>(null);
   const movePiece = useCallback(
     async (piece: number) => {
-      /* در چرخش و مکث فرود تاس، مهره‌ها واکنشی نیستند */
-      if (!myTurn || !l.dice || l.finished || rolling || settling) return;
+      /* تا پایان چرخش تاس مهره‌ها واکنشی نیستند؛ در مکث فرود (عدد ثابت) انتخاب آزاد است */
+      if (!myTurn || !l.dice || l.finished || rolling) return;
       if (!movable.has(piece)) {
         setShakeKey(`${me}:${piece}`);
         setTimeout(() => setShakeKey(null), 500);
@@ -553,7 +565,7 @@ export function LudoClient({
       finishedPlayer: boolean;
     }[] = [];
     const playerById = new Map(l.players.map((p) => [p.id, p]));
-    const movesVisible = !rolling && !settling; // تا مکث فرود تاس، نبض مهره‌ها پنهان است
+    const movesVisible = !rolling; // تا پایان چرخش تاس، نبض مهره‌ها پنهان است — در مکث فرود انتخاب آزاد است
     for (const [gkey, keys] of groups) {
       const [gx, gy] = gkey.split(",").map(Number);
       keys.sort();
@@ -583,12 +595,19 @@ export function LudoClient({
     }
     /* مهره‌های قابل‌حرکت و نوبت‌دار رو قرار می‌گیرند */
     return nodes.sort((a, b) => Number(a.movable) - Number(b.movable) || a.y - b.y);
-  }, [colorOf, movable, me, myTurn, l.players, rolling, settling, tick]);
+  }, [colorOf, movable, me, myTurn, l.players, rolling, tick]);
 
   const turnPlayer = l.players.find((p) => p.id === l.turnId);
   const remainingMs = Math.max(0, l.deadline - localNow);
-  /* پنجرهٔ زمانی نوبت — پرتاب یا انتخاب حرکت؛ برای قوس زمان دور تاس */
-  const windowMs = l.dice ? LUDO_MOVE_MS : LUDO_TURN_MS;
+  /* پنجرهٔ زمانی نوبت — برای ربات‌ها پنجرهٔ واقعی کوتاه‌تر است تا قوس زمان درست تخلیه شود */
+  const turnIsBot = turnPlayer?.bot ?? false;
+  const windowMs = l.dice
+    ? turnIsBot
+      ? LUDO_BOT_MOVE_MIN + LUDO_BOT_MOVE_VAR
+      : LUDO_MOVE_MS
+    : turnIsBot
+      ? LUDO_BOT_ROLL_MIN + LUDO_BOT_ROLL_VAR
+      : LUDO_TURN_MS;
   const timerFrac = Math.min(1, Math.max(0, remainingMs / windowMs));
   const turnColor = turnPlayer ? LUDO_COLOR_INFO[turnPlayer.color].base : "#fbbf24";
   const myInfo = myColor !== undefined ? LUDO_COLOR_INFO[myColor] : null;
@@ -635,7 +654,7 @@ export function LudoClient({
         .ludo-die-settle { animation: ludoSettlePop .95s ease-out; }
         @keyframes ludoSettlePop { 0% { transform: scale(1) } 30% { transform: scale(1.14); filter: drop-shadow(0 0 10px rgba(251,191,36,.65)) } 100% { transform: scale(1) } }
         .ludo-die { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; transition: transform .6s cubic-bezier(.2,.8,.3,1.1); }
-        .ludo-die-rolling { animation: ludoTumble 1.5s cubic-bezier(.45,.1,.55,.9) infinite; }
+        .ludo-die-rolling { animation: ludoTumble 1.4s cubic-bezier(.45,.1,.55,.9) infinite; }
         @keyframes ludoTumble { 0% { transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg) } 100% { transform: rotateX(720deg) rotateY(720deg) rotateZ(360deg) } }
         .ludo-die-face { position: absolute; inset: 0; border-radius: 14px; background: linear-gradient(150deg,#fffef8 0%,#f6ecd2 55%,#e4d3aa 100%); border: 1px solid #c9b78d; box-shadow: inset 0 0 12px rgba(255,255,255,.8), inset 0 -3px 8px rgba(176,146,86,.4); }
         .ludo-die-face-1 { transform: translateZ(32px) }
@@ -1108,7 +1127,7 @@ export function LudoClient({
           <button
             onClick={() => void roll()}
             disabled={!myTurn || Boolean(l.dice) || l.finished || countdown > 0}
-            className={`flex items-center justify-center gap-2 rounded-2xl border p-3 transition ${
+            className={`flex items-center justify-center gap-2 rounded-2xl border p-3 transition active:scale-95 ${
               ctaActive ? "ludo-roll-cta" : "border-zinc-800 bg-zinc-900/70"
             } ${!myTurn && !l.finished ? "opacity-85" : ""}`}
             style={
@@ -1122,7 +1141,7 @@ export function LudoClient({
             }
             aria-label={L.yourTurn}
           >
-            <Die3D v={l.dice?.v ?? 6} rolling={rolling} settle={settling} />
+            <Die3D v={l.dice?.v ?? lastDiceVRef.current} rolling={rolling} settle={settling} />
           </button>
         </div>
       </div>

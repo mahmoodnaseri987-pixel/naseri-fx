@@ -18,6 +18,9 @@
        (مسابقه‌های قدیمی ممکن است خانهٔ عقب‌رو داشته باشند — برای سازگاری
        پشتیبانی می‌شوند ولی در مسابقه‌های تازه دیگر ساخته نمی‌شوند.)
      • مهلت هر نوبت ۱۸ ثانیه؛ تاس و حرکت خودکار انجام می‌شود.
+     • ریتم نوبت‌ها آرام و ثابت است: تاس یک‌بار می‌چرخد و روی عدد سرور
+       می‌ایستد، حداقل ۲ثانیه عدد دیده می‌شود، بعد مهره حرکت می‌کند و
+       نوبت بعدی هم ۲ثانیه بعد تاس می‌اندازد.
    این فایل در بستهٔ کلاینت هم ایمپورت می‌شود — هیچ وابستگی سروری ندارد.
    ================================================================ */
 
@@ -29,11 +32,11 @@ export const LUDO_MAX_PLAYERS = 4;
 export const LUDO_TURN_MS = 18_000; // مهلت پرتاب تاس در نوبت انسان
 export const LUDO_MOVE_MS = 14_000; // مهلت انتخاب حرکت بعد از دیدن تاس
 export const LUDO_START_DELAY_MS = 3_500; // شمارش معکوس شروع مسابقه
-export const LUDO_BOT_ROLL_MIN = 900; // تاخیر فکر ربات قبل از پرتاب
-export const LUDO_BOT_ROLL_VAR = 1300;
-export const LUDO_BOT_MOVE_MIN = 600; // تاخیر فکر ربات بین تاس و حرکت
+export const LUDO_BOT_ROLL_MIN = 1_900; // تاخیر ربات قبل از پرتاب بعد از شروع نوبت
+export const LUDO_BOT_ROLL_VAR = 1_100;
+export const LUDO_BOT_MOVE_MIN = 3_400; // تاخیر ربات بین فرود تاس و حرکت مهره
 export const LUDO_BOT_MOVE_VAR = 900;
-export const LUDO_BOT_DEADLINE = 2_600; // سقف زمان ربات برای هر اکشن
+export const LUDO_BOT_DEADLINE = 4_400; // سقف زمان ربات برای هر اکشن
 
 export const LUDO_PIECES = 4; // تعداد مهرهٔ هر بازیکن
 export const LUDO_TRACK_CELLS = 52; // خانه‌های مسیر اصلی
@@ -147,7 +150,7 @@ export const LUDO_SURPRISE_LABEL: Record<LudoSurpriseKind, string> = {
 
 /* ---------- وضعیت مسابقه ---------- */
 
-export type LudoDice = { v: number }; // یک تاس — عدد ۱ تا ۶
+export type LudoDice = { v: number; at?: number }; // یک تاس — عدد ۱ تا ۶؛ «at» شناسهٔ پایدار همین پرتاب (seq هنگام پرتاب)
 
 export type LudoPlayerInfo = {
   id: string;

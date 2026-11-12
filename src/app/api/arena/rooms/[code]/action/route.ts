@@ -63,7 +63,7 @@ import {
   parseLudoState,
   rollDice,
 } from "@/lib/ludo-engine";
-import { parseState, persistFireState, persistLudoState, settleLudo } from "@/lib/arena-live";
+import { invalidateRoomSnapshot, parseState, persistFireState, persistLudoState, settleLudo } from "@/lib/arena-live";
 
 /** خواندن امن فرادادهٔ اتاق (مثل گروه سنی) از JSON خام state — قبل از شروع بازی */
 function safeStateMeta(raw: string): { ageGroup?: unknown } {
@@ -793,6 +793,7 @@ export async function POST(
           },
         }),
       ]);
+      invalidateRoomSnapshot(room.code); // تخته بلافاصله برای همه بالا بیاید
       return NextResponse.json({ ok: true });
     }
 
@@ -812,6 +813,7 @@ export async function POST(
         const namesOf: Record<string, string> = {};
         for (const m of room.members) namesOf[m.memberId] = m.name;
         const persisted = await persistLudoState(room.id, lState);
+        invalidateRoomSnapshot(room.code); // اسنپ‌شات کهنه همان‌جا باطله شود
         try {
           for (const content of ludoEventTexts(tick.events, namesOf)) {
             await db.chatMessage.create({
@@ -842,12 +844,13 @@ export async function POST(
         if (nowMs > lState.deadline + 2_500) {
           return NextResponse.json({ error: "expired" }, { status: 409 });
         }
-        lState.dice = rollDice();
-        lState.rolls += 1;
         lState.seq += 1;
+        lState.dice = { ...rollDice(), at: lState.seq }; // «at» شناسهٔ پایدار این پرتاب برای کلاینت
+        lState.rolls += 1;
         lState.deadline = nowMs + LUDO_MOVE_MS;
         const okp = await persistLudoState(room.id, lState);
         if (!okp) return NextResponse.json({ error: "conflict" }, { status: 409 });
+        invalidateRoomSnapshot(room.code); // کلاینت بلافاصله تاس تازه را ببیند
         return NextResponse.json({ ok: true, v: lState.dice.v });
       }
 
@@ -863,6 +866,7 @@ export async function POST(
         const namesOf: Record<string, string> = {};
         for (const m of room.members) namesOf[m.memberId] = m.name;
         const persisted = await persistLudoState(room.id, lState);
+        invalidateRoomSnapshot(room.code); // حرکت مهره بلافاصله برای همه دیده شود
         try {
           for (const content of ludoEventTexts(outcome.events, namesOf)) {
             await db.chatMessage.create({
@@ -895,6 +899,7 @@ export async function POST(
       }
       const okp = await persistLudoState(room.id, lState);
       if (!okp) return NextResponse.json({ error: "conflict" }, { status: 409 });
+      invalidateRoomSnapshot(room.code); // پاس — نوبت بعدی بلافاصله اعلام شود
       if (outcome.settled && lState.result) {
         const namesOf: Record<string, string> = {};
         for (const m of room.members) namesOf[m.memberId] = m.name;
@@ -918,6 +923,7 @@ export async function POST(
         }
         maybeFinish(lState, Date.now());
         await persistLudoState(room.id, lState);
+        invalidateRoomSnapshot(room.code); // خروج از مسابقه — نوبت/نتایج تازه شود
         if (lState.result) {
           const namesOf: Record<string, string> = {};
           for (const m of room.members) namesOf[m.memberId] = m.name;
@@ -1127,6 +1133,7 @@ export async function POST(
       db.roomMember.updateMany({ where: { roomId: room.id }, data: { score: 0, isReady: false, fireInput: "{}" } }),
       db.roomAnswer.deleteMany({ where: { roomId: room.id } }),
     ]);
+    invalidateRoomSnapshot(room.code); // لابی تازه برای همه
     return NextResponse.json({ ok: true });
   }
 
