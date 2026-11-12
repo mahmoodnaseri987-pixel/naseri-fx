@@ -255,3 +255,13 @@ model SherSong {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
+
+// تکه‌های آپلود آهنگ شعر — پس از کامل‌شدن به گیت‌هاب کامیت و ردیف‌ها پاک می‌شوند
+model SherUploadChunk {
+  id        String   @id @default(cuid())
+  uploadId  String   // شناسهٔ آپلود — از کلاینت (randomUUID)
+  idx       Int      // شمارهٔ تکه از صفر
+  data      String   // محتوای تکه به base64
+  createdAt DateTime @default(now())
+  @@unique([uploadId, idx])
+}

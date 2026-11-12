@@ -1,10 +1,11 @@
 "use client";
 
-/* پنل مدیریت آهنگ‌های بازی «شعر یادت نره» — فهرست فایل‌های پوشه + متادیتای دیتابیس:
-   پخش نمونه، تنظیم زمان شروع کلیپ، متن مصرع‌ها و فعال/غیرفعال کردن */
+/* پنل مدیریت آهنگ‌های بازی «شعر یادت نره» — آپلود تکه‌تکهٔ فایل صوتی
+   (کامیت خودکار در گیت‌هاب)، حذف فایل/رکورد، پخش نمونه، تنظیم زمان
+   شروع کلیپ، متن مصرع‌ها و فعال/غیرفعال کردن */
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Loader2, Music4, RefreshCw } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
+import { Loader2, Music4, RefreshCw, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -37,10 +38,22 @@ const STATUS: Record<SongStatus, { label: string; cls: string }> = {
 const field =
   "h-10 border-zinc-800 bg-zinc-950 text-right text-sm text-zinc-100 placeholder:text-zinc-600";
 
+const CHUNK_BYTES = 900 * 1024; // هر تکه ~۹۰۰ کیلوبایت — زیر سقف بدنهٔ ~۴.۵ مگابایتی ورکل
+
 function formatSize(n: number): string {
   if (n < 1024) return `${n} بایت`;
   if (n < 1048576) return `${(n / 1024).toFixed(0)} کیلوبایت`;
   return `${(n / 1048576).toFixed(1)} مگابایت`;
+}
+
+/* ArrayBuffer → base64 (بخش‌بخش برای جلوگیری از سرریز پشتهٔ فراخوانی) */
+function bufferToBase64(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf);
+  const parts: string[] = [];
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    parts.push(String.fromCharCode(...bytes.subarray(i, i + 0x8000)));
+  }
+  return btoa(parts.join(""));
 }
 
 function rowFrom(row: SherSongRow): SherSongRow {
@@ -76,18 +89,24 @@ function draftFrom(row: SherSongRow): Draft {
   };
 }
 
-/* کارت یک آهنگ — پخش‌کننده، فیلدهای متن و دکمه‌های ذخیره/فعال‌سازی */
+/* کارت یک آهنگ — پخش‌کننده، فیلدهای متن و دکمه‌های ذخیره/فعال‌سازی/حذف */
 function SongCard({
   row,
   onPatch,
+  onRefresh,
+  notify,
 }: {
   row: SherSongRow;
   onPatch: (filename: string, patch: Partial<SherSongRow>) => void;
+  onRefresh: () => void;
+  notify: (text: string, ok?: boolean) => void;
 }) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [draft, setDraft] = useState<Draft>(() => draftFrom(row));
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
+  const [deletingFile, setDeletingFile] = useState(false);
+  const [deletingRecord, setDeletingRecord] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   /* پیش‌نویس فقط با تایپ کاربر تغییر می‌کند — به‌روزرسانی ردیف از بیرون (ذخیره/فعال‌سازی)
@@ -164,6 +183,58 @@ function SongCard({
     }
   }
 
+  /* حذف فایل صوتی از مخزن (کامیت حذف در گیت‌هاب) — رکورد متادیتا می‌ماند */
+  async function deleteFile() {
+    if (
+      !window.confirm(
+        `فایل صوتی «${row.filename}» از سایت حذف شود؟\n` +
+          "یک انتشار خودکار ۲-۳ دقیقه‌ای راه می‌افتد؛ متادیتا در دیتابیس می‌ماند و می‌توانید فایل را دوباره آپلود کنید.",
+      )
+    )
+      return;
+    setDeletingFile(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/sher/admin/delete-file", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename: row.filename }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "حذف فایل ناموفق بود.");
+      onRefresh();
+      notify(
+        `فایل «${row.filename}» حذف شد — انتشار خودکار ۲-۳ دقیقه‌ای؛ بعد «به‌روزرسانی فهرست» را بزن.`,
+      );
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : "حذف فایل ناموفق بود." });
+    } finally {
+      setDeletingFile(false);
+    }
+  }
+
+  /* حذف رکورد متادیتای بدون فایل از دیتابیس */
+  async function deleteRecord() {
+    if (!window.confirm(`رکورد متادیتای «${row.filename}» از دیتابیس حذف شود؟`)) return;
+    setDeletingRecord(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/sher/admin/delete-record", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename: row.filename }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "حذف رکورد ناموفق بود.");
+      onRefresh();
+      notify(`رکورد «${row.filename}» از دیتابیس حذف شد.`);
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : "حذف رکورد ناموفق بود." });
+    } finally {
+      setDeletingRecord(false);
+    }
+  }
+
   const ready = row.status === "ready";
 
   return (
@@ -189,10 +260,32 @@ function SongCard({
       </div>
 
       {row.status === "stale" ? (
-        <p className="mt-3 text-sm text-rose-300/90">
-          فایل صوتی در پوشهٔ public/sher/songs نیست؛ متادیتای ذخیره‌شده در دیتابیس باقی مانده
-          است. اگر فایل را برگردانید، این ردیف دوباره به فهرست اصلی می‌پیوندد.
-        </p>
+        <>
+          <p className="mt-3 text-sm text-rose-300/90">
+            فایل صوتی در پوشهٔ public/sher/songs نیست؛ متادیتای ذخیره‌شده در دیتابیس باقی مانده
+            است. اگر فایل را برگردانید، این ردیف دوباره به فهرست اصلی می‌پیوندد.
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={deleteRecord}
+              disabled={deletingRecord}
+              className="h-9 rounded-xl border-zinc-700 bg-transparent text-xs text-rose-300 hover:border-rose-500/40 hover:bg-zinc-800"
+            >
+              {deletingRecord && (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+              )}
+              حذف رکورد
+            </Button>
+            {msg && (
+              <span className={`text-xs ${msg.ok ? "text-emerald-300" : "text-rose-300"}`}>
+                {msg.text}
+              </span>
+            )}
+          </div>
+        </>
       ) : (
         <div className="mt-4 space-y-4">
           {/* پخش‌کنندهٔ نمونه */}
@@ -337,6 +430,19 @@ function SongCard({
               {toggling && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />}
               {row.active ? "غیرفعال کردن" : "فعال کردن"}
             </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={deleteFile}
+              disabled={deletingFile}
+              className="h-9 rounded-xl border-zinc-700 bg-transparent text-xs text-rose-300 hover:border-rose-500/40 hover:bg-zinc-800"
+            >
+              {deletingFile && (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+              )}
+              حذف فایل
+            </Button>
             {ready && !draft.active && (
               <span className="text-[11px] text-zinc-500">
                 توجه: آهنگِ فعال‌نشده وارد بازی نمی‌شود.
@@ -359,6 +465,13 @@ export function SherAdminClient() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [reloadKey, setReloadKey] = useState(0); // با هر refresh کامل، کارت‌ها ریمونت می‌شوند
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [picked, setPicked] = useState<File[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState("");
+  const [uploadMsg, setUploadMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
 
   const load = useCallback(async (soft = false) => {
     if (soft) setRefreshing(true);
@@ -390,6 +503,100 @@ export function SherAdminClient() {
       list.map((r) => (r.filename === filename ? rowFrom({ ...r, ...patch }) : r)),
     );
   }, []);
+
+  /* تازه‌سازی فهرست پس از حذف فایل/رکورد */
+  const refreshList = useCallback(() => {
+    load(true);
+  }, [load]);
+
+  /* اعلان موفقیت حذف‌ها — چند ثانیه بعد پاک می‌شود */
+  const notify = useCallback((text: string, ok = true) => setNotice({ ok, text }), []);
+  useEffect(() => {
+    if (!notice) return;
+    const t = setTimeout(() => setNotice(null), 8000);
+    return () => clearTimeout(t);
+  }, [notice]);
+
+  /* --- آپلود تکه‌تکهٔ یک فایل — ترتیبی، هر تکه با یک تلاش مجدد --- */
+  async function postChunk(
+    uploadId: string,
+    filename: string,
+    total: number,
+    index: number,
+    data: string,
+  ): Promise<void> {
+    let lastErr = "";
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const res = await fetch("/api/sher/admin/upload", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ uploadId, filename, total, index, data }),
+        });
+        if (res.status === 401) {
+          window.location.href = "/admin";
+          return;
+        }
+        const d = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+        if (res.ok && d.ok) return;
+        lastErr = d.error || `خطای سرور (کد ${res.status})`;
+      } catch {
+        lastErr = "اتصال به سرور برقرار نشد.";
+      }
+      if (attempt === 0) await new Promise((r) => setTimeout(r, 800)); // پیش از تلاش مجدد کمی صبر
+    }
+    throw new Error(lastErr || "آپلود تکه ناموفق بود.");
+  }
+
+  async function uploadOneFile(file: File, fileNo: number, fileCount: number): Promise<void> {
+    const uploadId = crypto.randomUUID();
+    const buf = await file.arrayBuffer();
+    if (buf.byteLength === 0) throw new Error(`فایل «${file.name}» خالی است.`);
+    if (buf.byteLength > 15 * 1024 * 1024)
+      throw new Error(`فایل «${file.name}» بزرگ‌تر از سقف ۱۵ مگابایت است.`);
+    const total = Math.ceil(buf.byteLength / CHUNK_BYTES);
+    for (let i = 0; i < total; i++) {
+      setProgress(
+        `فایل ${fileNo} از ${fileCount} — «${file.name}» — تکه ${i + 1} از ${total}`,
+      );
+      const slice = buf.slice(i * CHUNK_BYTES, Math.min((i + 1) * CHUNK_BYTES, buf.byteLength));
+      await postChunk(uploadId, file.name, total, i, bufferToBase64(slice));
+    }
+  }
+
+  async function startUpload() {
+    if (uploading || picked.length === 0) return;
+    setUploading(true);
+    setUploadMsg(null);
+    const count = picked.length;
+    try {
+      for (let f = 0; f < count; f++) {
+        await uploadOneFile(picked[f], f + 1, count);
+      }
+      setUploadMsg({
+        ok: true,
+        text:
+          (count > 1 ? `${count} فایل آپلود شد` : "آپلود شد") +
+          " — انتشار خودکار ۲-۳ دقیقه‌ای؛ بعد «به‌روزرسانی فهرست» را بزن." +
+          " اگر نام فایلی از قبل موجود بوده، نسخهٔ جدید جایگزین قبلی شده است.",
+      });
+      setPicked([]);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    } catch (e) {
+      setUploadMsg({
+        ok: false,
+        text: e instanceof Error ? e.message : "آپلود ناموفق بود — دوباره تلاش کنید.",
+      });
+    } finally {
+      setUploading(false);
+      setProgress("");
+    }
+  }
+
+  function onPick(e: ChangeEvent<HTMLInputElement>) {
+    setPicked(Array.from(e.target.files ?? []));
+    setUploadMsg(null);
+  }
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100" dir="rtl">
@@ -430,9 +637,70 @@ export function SherAdminClient() {
       <main className="mx-auto max-w-4xl space-y-4 px-4 py-6 sm:px-6">
         {/* راهنمای کارفرما */}
         <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/5 p-4 text-sm leading-7 text-emerald-100/90">
-          فایل صوتی را در پوشهٔ public/sher/songs در گیت‌هاب بگذار (یا به دستیار بگو)؛ بعد از
-          انتشار سایت، آهنگ خودکار در همین لیست می‌آید. برای هر آهنگ: لحظهٔ شروع کلیپ و بیتِ
+          فایل صوتی را از همین‌جا آپلود کن — دیگر لازم نیست چیزی در گیت‌هاب بگذاری. حذف فایل و
+          حذف رکورد هم از همین‌جاست. هر تغییر (آپلود یا حذف) یک انتشار خودکار ۲-۳ دقیقه‌ای راه
+          می‌اندازد؛ بعد از آن «به‌روزرسانی فهرست» را بزن. برای هر آهنگ: لحظهٔ شروع کلیپ و بیتِ
           بعدی را مشخص کن.
+        </div>
+
+        {/* اعلان حذف‌ها */}
+        {notice && (
+          <div
+            className={`rounded-2xl border p-3 text-sm leading-6 ${
+              notice.ok
+                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
+                : "border-rose-500/30 bg-rose-500/10 text-rose-200"
+            }`}
+          >
+            {notice.text}
+          </div>
+        )}
+
+        {/* باکس آپلود */}
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept=".mp3,.wav,.m4a,.ogg,.flac"
+              onChange={onPick}
+              disabled={uploading}
+              className="h-10 max-w-full text-sm text-zinc-300 file:me-3 file:h-9 file:rounded-xl file:border-0 file:bg-zinc-800 file:px-3 file:text-xs file:text-zinc-200 hover:file:bg-zinc-700"
+              dir="ltr"
+            />
+            <Button
+              type="button"
+              size="sm"
+              onClick={startUpload}
+              disabled={uploading || picked.length === 0}
+              className="h-9 rounded-xl bg-emerald-600 text-xs text-white hover:bg-emerald-500"
+            >
+              {uploading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+              ) : (
+                <Upload className="h-3.5 w-3.5" aria-hidden="true" />
+              )}
+              آپلود
+            </Button>
+            {picked.length > 0 && !uploading && (
+              <span className="text-xs text-zinc-500">
+                {picked.length} فایل انتخاب شد — هر فایل حداکثر ۱۵ مگابایت
+              </span>
+            )}
+          </div>
+          {uploading && progress && (
+            <p className="mt-3 text-xs text-emerald-300">{progress}</p>
+          )}
+          {uploadMsg && (
+            <p
+              className={`mt-3 text-xs leading-6 ${
+                uploadMsg.ok ? "text-emerald-300" : "text-rose-300"
+              }`}
+            >
+              {uploadMsg.text}
+            </p>
+          )}
         </div>
 
         {loading ? (
@@ -441,12 +709,18 @@ export function SherAdminClient() {
           </div>
         ) : rows.length === 0 ? (
           <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-8 text-center text-sm text-zinc-400">
-            هنوز فایلی در پوشهٔ public/sher/songs نیست. اولین فایل صوتی را بگذار تا این‌جا
-            نمایش داده شود.
+            هنوز فایلی در پوشهٔ public/sher/songs نیست. اولین فایل صوتی را از باکس بالا آپلود کن
+            تا پس از انتشار، این‌جا نمایش داده شود.
           </div>
         ) : (
           rows.map((row) => (
-            <SongCard key={`${reloadKey}-${row.filename}`} row={row} onPatch={patchRow} />
+            <SongCard
+              key={`${reloadKey}-${row.filename}`}
+              row={row}
+              onPatch={patchRow}
+              onRefresh={refreshList}
+              notify={notify}
+            />
           ))
         )}
       </main>
