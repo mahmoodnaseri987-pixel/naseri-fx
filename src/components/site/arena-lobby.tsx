@@ -15,6 +15,7 @@ import {
   Loader2,
   LogIn,
   MessagesSquare,
+  Music,
   Plus,
   RefreshCw,
   Swords,
@@ -33,6 +34,7 @@ import { NABARD_GAME_SLUG } from "@/lib/nabard-engine";
 import { JADVAL_GAME_SLUG } from "@/lib/jadval-shared";
 import { PIC_GAME_SLUG } from "@/lib/pic-shared";
 import { LUDO_GAME_SLUG, LUDO_MAX_PLAYERS } from "@/lib/ludo-shared";
+import { SHER_GAME_SLUG } from "@/lib/sher-shared";
 import type { ArenaGameConfigView, ArenaRoomSummary, MemberInfo } from "@/lib/types";
 
 /* کارت ویژهٔ «میدان آتش آفلاین» که از پنل هم قابل حذف است */
@@ -42,7 +44,7 @@ type LobbyGame = {
   slug: string;
   title: string;
   desc: string;
-  icon: "swords" | "zap" | "grid" | "image" | "dice";
+  icon: "swords" | "zap" | "grid" | "image" | "dice" | "music";
 };
 
 export function ArenaLobby({ member }: { member: MemberInfo }) {
@@ -188,6 +190,7 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
       { slug: JADVAL_GAME_SLUG, title: a.gameJadval, desc: a.gameJadvalDesc, icon: "grid" },
       { slug: PIC_GAME_SLUG, title: a.gamePic, desc: a.gamePicDesc, icon: "image" },
       { slug: LUDO_GAME_SLUG, title: a.gameLudo, desc: a.gameLudoDesc, icon: "dice" },
+      { slug: SHER_GAME_SLUG, title: a.gameSher, desc: a.gameSherDesc, icon: "music" },
     ];
     if (!gamesCfg) return all;
     const order = new Map(gamesCfg.map((g, i) => [g.slug, i]));
@@ -313,6 +316,8 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
                       <ImageIcon className="h-4 w-4" aria-hidden="true" />
                     ) : g.icon === "dice" ? (
                       <Dices className="h-4 w-4" aria-hidden="true" />
+                    ) : g.icon === "music" ? (
+                      <Music className="h-4 w-4" aria-hidden="true" />
                     ) : (
                       <Swords className="h-4 w-4" aria-hidden="true" />
                     )}

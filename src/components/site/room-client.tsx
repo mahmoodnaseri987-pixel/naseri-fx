@@ -31,11 +31,13 @@ import { NabardClient } from "@/components/site/nabard-client";
 import { JadvalClient } from "@/components/site/jadval-client";
 import { PicClient } from "@/components/site/pic-client";
 import { LudoClient } from "@/components/site/ludo-client";
+import { SherClient } from "@/components/site/sher-client";
 import { subscribeStream } from "@/lib/realtime";
 import { ARENA_GAME_SLUG, ANSWER_MS, BOT_GAMES, REVEAL_MS, CATEGORY_LABELS, isBotId, type ArenaCategory } from "@/lib/arena-game";
 import { JADVAL_GAME_SLUG } from "@/lib/jadval-shared";
 import { PIC_GAME_SLUG } from "@/lib/pic-shared";
 import { LUDO_GAME_SLUG } from "@/lib/ludo-shared";
+import { SHER_GAME_SLUG, SHER_MODES, sherModesFor, type SherMode } from "@/lib/sher-shared";
 import { sfxAmbientStart, sfxAmbientStop, sfxIsMuted, sfxLose, sfxToggleMuted, sfxWin } from "@/lib/arena-sfx";
 import type { ArenaStateResponse } from "@/lib/types";
 
@@ -58,6 +60,8 @@ export function RoomClient({ code }: { code: string }) {
   const [muted, setMuted] = useState(false); // افکت‌های صوتی — بعد از mount از localStorage خوانده می‌شود
   const [ludoTeams, setLudoTeams] = useState(false); // منچ — انتخاب بازی تیمی ۲به۲ توسط میزبان
   const seenTeamsRef = useRef(false); // آخرین مقدار دریافتی از سرور — فقط با تغییر واقعی همگام می‌شود
+  const [sherMode, setSherMode] = useState<SherMode>("ffa"); // مود انتخابی میزبان برای «شعر یادت نره»
+  const [sherError, setSherError] = useState(""); // خطای شروع شعر (مثلاً آهنگ فعال نبودن)
 
   /* انتخاب تیمی میزبان از سرور (مثلاً بعد از «مسابقه دوباره») — بدون به‌هم‌زدن کلید محلی */
   useEffect(() => {
@@ -217,6 +221,28 @@ export function RoomClient({ code }: { code: string }) {
     if (!st?.game || picked !== null || sending || st.game.phase !== "answer") return;
     setPicked(choice);
     await action({ type: "answer", round: st.game.round, choice });
+  }
+
+  /* شروع مسابقهٔ «شعر یادت نره» — با مود انتخابی میزبان؛ خطا (مثلاً نبود آهنگ فعال) نمایش داده می‌شود */
+  async function startSher() {
+    if (sending) return;
+    setSending(true);
+    setSherError("");
+    try {
+      const res = await fetch(`/api/arena/rooms/${encodeURIComponent(code)}/action`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "sher_start", mode: sherMode }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        if (data.error === "sher-no-songs") setSherError(t.arena.sher.noSongs);
+      }
+    } catch {
+      setSherError(r.connectionLost);
+    } finally {
+      setSending(false);
+    }
   }
 
   async function copyCode() {
@@ -425,8 +451,45 @@ export function RoomClient({ code }: { code: string }) {
                   )}
                 </>
               )}
+              {/* حالت‌های مسابقهٔ «شعر یادت نره» — میزبان قبل از شروع انتخاب می‌کند */}
+              {st.room.gameSlug === SHER_GAME_SLUG && (
+                <div className="w-full max-w-xs rounded-2xl border border-violet-500/30 bg-violet-500/[0.06] p-3.5">
+                  <p className="text-xs font-bold text-zinc-300">{a.sher.modeTitle}</p>
+                  <div className="mt-2 grid grid-cols-2 gap-1.5">
+                    {SHER_MODES.map((m) => {
+                      const allowed = sherModesFor(st.members.length).includes(m);
+                      return (
+                        <button
+                          key={m}
+                          type="button"
+                          disabled={!allowed || sending}
+                          onClick={() => setSherMode(m)}
+                          aria-pressed={m === sherMode}
+                          className={`rounded-lg border px-2 py-2 text-[11px] font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-30 ${
+                            m === sherMode
+                              ? "border-violet-500/60 bg-violet-500/15 text-violet-200"
+                              : "border-zinc-800 bg-zinc-950/40 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
+                          }`}
+                        >
+                          {a.sher[`mode${m.charAt(0).toUpperCase()}${m.slice(1)}` as keyof typeof a.sher] as string}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-1.5 text-[10px] leading-4 text-zinc-500">{a.sher.modeHint}</p>
+                  {sherError && (
+                    <p className="mt-2 rounded-lg bg-rose-500/10 px-3 py-1.5 text-center text-[11px] font-bold text-rose-300">
+                      {sherError}
+                    </p>
+                  )}
+                </div>
+              )}
               <Button
-                onClick={() => action({ type: "start", teams: ludoTeams })}
+                onClick={() =>
+                  st.room.gameSlug === SHER_GAME_SLUG
+                    ? startSher()
+                    : action({ type: "start", teams: ludoTeams })
+                }
                 disabled={sending || !allReady}
                 className="h-12 w-full max-w-xs rounded-xl bg-violet-500 text-base font-bold text-zinc-950 hover:bg-violet-400 disabled:opacity-40"
               >
@@ -506,10 +569,25 @@ export function RoomClient({ code }: { code: string }) {
             </ul>
           </div>
         )}
+        {st.room.gameSlug === SHER_GAME_SLUG && (
+          <p className="mt-8 rounded-2xl border border-violet-500/30 bg-violet-500/[0.06] px-4 py-3.5 text-center text-xs leading-6 text-zinc-300">
+            {a.sher.lobbyHint}
+          </p>
+        )}
         <section className="mt-6 h-[460px] overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/60">
           <ChatPanel scope={code} className="h-full" />
         </section>
       </div>
+    );
+  }
+
+  /* «شعر یادت نره» — مسابقه و نتایج داخل خود بازی رندر می‌شود */
+  if (st.room.gameSlug === SHER_GAME_SLUG && st.sher) {
+    return (
+      <>
+        {chatFloat}
+        <SherClient st={st} offsetMs={st.now - fetchedAt} />
+      </>
     );
   }
 

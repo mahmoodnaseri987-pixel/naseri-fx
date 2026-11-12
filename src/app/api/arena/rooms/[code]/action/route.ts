@@ -64,7 +64,21 @@ import {
   parseLudoState,
   rollDice,
 } from "@/lib/ludo-engine";
-import { invalidateRoomSnapshot, parseState, persistFireState, persistLudoState, settleLudo } from "@/lib/arena-live";
+import {
+  SHER_GAME_SLUG,
+  SHER_MODES,
+  parseSherState,
+  sherLobbyMode,
+  sherModesFor,
+  type SherMode,
+} from "@/lib/sher-shared";
+import {
+  createSherSongsPool,
+  createSherState,
+  sherAnswer,
+  sherTick,
+} from "@/lib/sher-engine";
+import { invalidateRoomSnapshot, parseState, persistFireState, persistLudoState, persistSherState, settleLudo } from "@/lib/arena-live";
 
 /** خواندن امن فرادادهٔ اتاق (مثل گروه سنی) از JSON خام state — قبل از شروع بازی */
 function safeStateMeta(raw: string): { ageGroup?: unknown } {
@@ -942,6 +956,109 @@ export async function POST(
     /* ready / again → منطق مشترک پایین اجرا می‌شود */
   }
 
+  /* ================================================================
+     اکشن‌های اختصاصی «شعر یادت نره» — موتور سمت سرور با تیک فازها
+     ================================================================ */
+  if (room.gameSlug === SHER_GAME_SLUG) {
+    /* --- شروع مسابقه (میزبان، حداقل ۲ نفر، همه آماده) --- */
+    if (type === "sher_start") {
+      if (room.status !== "lobby") {
+        return NextResponse.json({ error: "conflict" }, { status: 409 });
+      }
+      if (room.hostId !== me.memberId) {
+        return NextResponse.json({ error: "not host" }, { status: 403 });
+      }
+      if (room.members.length < MIN_PLAYERS) {
+        return NextResponse.json({ error: "need players" }, { status: 409 });
+      }
+      if (!room.members.every((m) => m.isReady)) {
+        return NextResponse.json({ error: "not ready" }, { status: 409 });
+      }
+      /* آهنگ‌های فعال در لحظهٔ شروع — بدون تکرار در همان مسابقه */
+      const pool = createSherSongsPool(
+        await db.sherSong.findMany({ where: { active: true } }),
+      );
+      if (pool.length === 0) {
+        return NextResponse.json({ error: "sher-no-songs" }, { status: 409 });
+      }
+      /* مود: انتخاب میزبان اگر برای تعداد اعضا مجاز بود؛ وگرنه مود حفظ‌شدهٔ
+         لابی (انتخاب دفعهٔ قبل)؛ وگرنه انفرادی */
+      const allowed = sherModesFor(room.members.length);
+      const requested = typeof body.mode === "string" ? body.mode : "";
+      const lobbyMode = sherLobbyMode(room.state);
+      const mode: SherMode =
+        (SHER_MODES as readonly string[]).includes(requested) && allowed.includes(requested as SherMode)
+          ? (requested as SherMode)
+          : lobbyMode && allowed.includes(lobbyMode)
+            ? lobbyMode
+            : "ffa";
+      const sState = createSherState(
+        mode,
+        room.members.map((m) => ({ id: m.memberId, name: m.name })),
+        pool,
+        Date.now(),
+      );
+      if (!sState) {
+        return NextResponse.json({ error: "sher-no-songs" }, { status: 409 });
+      }
+      await db.$transaction([
+        db.room.update({
+          where: { id: room.id },
+          data: { status: "playing", state: JSON.stringify(sState) },
+        }),
+        db.roomMember.updateMany({
+          where: { roomId: room.id },
+          data: { isReady: false, fireInput: "{}" },
+        }),
+        db.chatMessage.create({
+          data: {
+            scope: room.code,
+            memberId: me.memberId,
+            name: me.name,
+            content: "مسابقهٔ «شعر یادت نره» شروع شد — کلیپ را گوش کن و بیت بعدی را حدس بزن!",
+            kind: "system",
+          },
+        }),
+      ]);
+      invalidateRoomSnapshot(room.code); // مسابقه بلافاصله برای همه بالا بیاید
+      return NextResponse.json({ ok: true });
+    }
+
+    /* --- ثبت حدس «بیت بعدی» — با تیک مهلت‌ها و گارد seq --- */
+    if (type === "sher_answer") {
+      if (room.status !== "playing") {
+        return NextResponse.json({ error: "conflict" }, { status: 409 });
+      }
+      const sState = parseSherState(room.state);
+      if (!sState) return NextResponse.json({ error: "gone" }, { status: 404 });
+      if (!sState.players.some((p) => p.id === me.memberId)) {
+        return NextResponse.json({ error: "not player" }, { status: 403 });
+      }
+      /* اول مهلت‌های عقب‌افتاده (فازها و ربات‌ها) پردازش می‌شود */
+      sherTick(sState, {
+        now: Date.now(),
+        memberIds: new Set(room.members.map((m) => m.memberId)),
+      });
+      const level = Number(body.level);
+      const payload = typeof body.payload === "string" ? body.payload : "";
+      const outcome = sherAnswer(sState, me.memberId, level, payload);
+      if (!outcome.ok) {
+        if (outcome.reason === "bad-level" || outcome.reason === "bad-payload") {
+          return NextResponse.json({ error: outcome.reason }, { status: 400 });
+        }
+        return NextResponse.json({ error: outcome.reason ?? "conflict" }, { status: 409 });
+      }
+      const persisted = await persistSherState(room.id, sState);
+      invalidateRoomSnapshot(room.code); // شمارندهٔ پاسخ‌دهنده‌ها بلافاصله تازه شود
+      if (!persisted) {
+        return NextResponse.json({ error: "conflict" }, { status: 409 });
+      }
+      return NextResponse.json({ ok: true });
+    }
+
+    /* ready / leave / again → منطق مشترک پایین اجرا می‌شود */
+  }
+
   /* --- پرکردن صندلی‌های خالی با ربات (میزبان، فقط لابی، فقط بازی‌های سؤالی) ---
      میزبان بین «انتظار برای تکمیل بازیکنان» و «شروع با ربات» آزاد است؛
      هر ربات بلافاصله آماده است و در مسابقه سؤالی/جدول/حدس تصویر واقعاً بازی می‌کند. */
@@ -1126,6 +1243,22 @@ export async function POST(
     if (room.hostId !== me.memberId) {
       return NextResponse.json({ error: "not host" }, { status: 403 });
     }
+    /* «شعر یادت نره»: مود انتخابی میزبان حفظ می‌شود تا مسابقهٔ دوباره با
+       همان مود برگزار شود — اول از state لابی، وگرنه از مود مسابقهٔ گذشته */
+    const lobbyState = (() => {
+      if (room.gameSlug === SHER_GAME_SLUG) {
+        const sherMode =
+          sherLobbyMode(room.state) ?? parseSherState(room.state)?.mode ?? null;
+        return JSON.stringify(
+          sherMode ? { ageGroup: roomAgeGroup(room), sherMode } : { ageGroup: roomAgeGroup(room) },
+        );
+      }
+      /* منچ: بازی تیمی و گروه سنی برای مسابقهٔ بعدی هم می‌ماند */
+      return JSON.stringify({
+        ageGroup: roomAgeGroup(room),
+        ludoTeams: parseLudoState(room.state)?.teams === true,
+      });
+    })();
     await db.$transaction([
       db.room.update({
         where: { id: room.id },
@@ -1134,10 +1267,7 @@ export async function POST(
         data: {
           status: "lobby",
           ageGroup: roomAgeGroup(room), // گروه سنی انتخابی میزبان در «مسابقه دوباره» هم می‌ماند
-          state: JSON.stringify({
-            ageGroup: roomAgeGroup(room),
-            ludoTeams: parseLudoState(room.state)?.teams === true,
-          }),
+          state: lobbyState,
         },
       }),
       db.roomMember.updateMany({ where: { roomId: room.id }, data: { score: 0, isReady: false, fireInput: "{}" } }),

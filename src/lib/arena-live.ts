@@ -30,6 +30,8 @@ import {
   ludoTick,
   parseLudoState,
 } from "@/lib/ludo-engine";
+import { SHER_GAME_SLUG, parseSherState, type SherRoomState } from "@/lib/sher-shared";
+import { buildSherView, sherTick } from "@/lib/sher-engine";
 import {
   buildJadvalResult,
   buildJadvalView,
@@ -198,6 +200,44 @@ export async function settleLudo(
 }
 
 /* ================================================================
+   ذخیرهٔ وضعیت «شعر یادت نره» — با گارد «فقط رو به جلو» روی seq
+   ================================================================ */
+
+export async function persistSherState(roomId: string, sState: SherRoomState): Promise<boolean> {
+  const json = JSON.stringify(sState);
+  try {
+    const n = await db.$executeRaw`
+      UPDATE "Room" SET state = ${json}, "lastActivity" = now()
+      WHERE id = ${roomId} AND status = 'playing'
+        AND COALESCE(NULLIF(state, '')::jsonb ->> 'seq', '0')::double precision < ${sState.seq}`;
+    return n > 0;
+  } catch {
+    return false;
+  }
+}
+
+/** تسویهٔ نهایی «شعر یادت نره» — امتیاز مسابقهٔ هر عضو + بستن اتاق؛ فقط یک‌بار اجرا می‌شود */
+export async function settleSher(roomId: string, sState: SherRoomState): Promise<void> {
+  if (!sState.result) return;
+  try {
+    await db.$transaction(async (tx) => {
+      const n = await tx.$executeRaw`
+        UPDATE "Room" SET status = 'finished', state = ${JSON.stringify(sState)}, "lastActivity" = now()
+        WHERE id = ${roomId} AND status = 'playing'`;
+      if (n === 0) return; // نمونهٔ دیگر تسویه کرده است
+      for (const row of sState.result!.rows) {
+        await tx.roomMember.updateMany({
+          where: { roomId, memberId: row.id },
+          data: { score: row.score },
+        });
+      }
+    });
+  } catch {
+    /* خطای گذرا — اسنپ‌شات بعدی دوباره تلاش می‌کند */
+  }
+}
+
+/* ================================================================
    قطعی‌سازی «رقابت جدول» — پایان با تایم‌اوت یا تکمیل جدول
    ================================================================ */
 
@@ -298,6 +338,7 @@ async function buildSnapshot(code: string): Promise<RoomSnapshot | null> {
   const isJadval = room.gameSlug === JADVAL_GAME_SLUG;
   const isPic = room.gameSlug === PIC_GAME_SLUG;
   const isLudo = room.gameSlug === LUDO_GAME_SLUG;
+  const isSher = room.gameSlug === SHER_GAME_SLUG;
   const state = parseState(room.state);
   const now = Date.now();
   let status = room.status;
@@ -534,10 +575,28 @@ async function buildSnapshot(code: string): Promise<RoomSnapshot | null> {
     }
   }
 
+  /* «شعر یادت نره»: تیک خودکار — گذر فازها، جواب‌دهی ربات‌ها و تسویهٔ نتیجه */
+  let sherState: SherRoomState | null = null;
+  if (isSher && (status === "playing" || status === "finished")) {
+    sherState = parseSherState(room.state);
+  }
+  if (isSher && status === "playing" && sherState) {
+    const memberIds = new Set(room.members.map((m) => m.memberId));
+    const tick = sherTick(sherState, { now: Date.now(), memberIds });
+    if (tick.mutated) {
+      room.state = JSON.stringify(sherState);
+      await persistSherState(room.id, sherState);
+    }
+    if (sherState.result) {
+      await settleSher(room.id, sherState);
+      status = "finished";
+    }
+  }
+
   /* اگر مسابقه کوییز زمانش تمام شده، وضعیت را در دیتابیس قطعی کن
      (بازی‌های با وضعیت اختصاصی مستثنا هستند) */
   if (
-    !isNabard && !isFire && !isJadval && !isPic && !isLudo &&
+    !isNabard && !isFire && !isJadval && !isPic && !isLudo && !isSher &&
     status === "playing" &&
     computePhase(state.startedAtMs, now).status === "finished"
   ) {
@@ -584,7 +643,7 @@ async function buildSnapshot(code: string): Promise<RoomSnapshot | null> {
   let answered: Record<string, number> = {};
   let phaseKey = "";
   if (
-    !isNabard && !isFire && !isJadval && !isPic && !isLudo && status === "playing"
+    !isNabard && !isFire && !isJadval && !isPic && !isLudo && !isSher && status === "playing"
   ) {
     const phase = computePhase(state.startedAtMs, Date.now());
     if (phase.status === "playing") {
@@ -619,6 +678,9 @@ async function buildSnapshot(code: string): Promise<RoomSnapshot | null> {
   }
   if (isLudo && status === "playing") {
     phaseKey = `lu:${ludoState?.seq ?? 0}`;
+  }
+  if (isSher && status === "playing") {
+    phaseKey = `sh:${sherState?.seq ?? 0}`;
   }
 
   const members: SnapMember[] = room.members.map((m) => ({
@@ -718,6 +780,7 @@ export function viewFromSnapshot(
   const isJadval = room.gameSlug === JADVAL_GAME_SLUG;
   const isPic = room.gameSlug === PIC_GAME_SLUG;
   const isLudo = room.gameSlug === LUDO_GAME_SLUG;
+  const isSher = room.gameSlug === SHER_GAME_SLUG;
   const onlineCutoff = now - ONLINE_MS;
 
   const members: ArenaMemberView[] = snap.members.map((m) => ({
@@ -731,7 +794,7 @@ export function viewFromSnapshot(
   }));
 
   let game: ArenaGameView | null = null;
-  if (!isNabard && !isFire && !isJadval && !isPic && room.status === "playing") {
+  if (!isNabard && !isFire && !isJadval && !isPic && !isSher && room.status === "playing") {
     const phase = computePhase(snap.state.startedAtMs, now);
     if (phase.status === "playing") {
       const q = snap.state.qs[phase.round];
@@ -813,6 +876,21 @@ export function viewFromSnapshot(
     }
   }
 
+  /* نمای «شعر یادت نره» — جواب دور در فازهای listen/guess هرگز بیرون نمی‌رود */
+  let sher: import("@/lib/sher-shared").SherView | null = null;
+  if (isSher && (room.status === "playing" || room.status === "finished")) {
+    const ss = parseSherState(snap.rawState);
+    if (ss) {
+      const sherMembers = snap.members.map((m) => ({
+        id: m.id,
+        name: m.name,
+        bot: isBotId(m.id),
+        online: isBotId(m.id) || m.lastSeenMs >= onlineCutoff,
+      }));
+      sher = buildSherView(ss, memberId, sherMembers, now);
+    }
+  }
+
   return {
     now,
     me: memberId,
@@ -833,6 +911,7 @@ export function viewFromSnapshot(
     jadval,
     pic,
     ludo,
+    sher,
   };
 }
 

@@ -3,7 +3,7 @@
 /* صفحه کامل پنل مدیریت روی /admin — ورود، ناوبری و همه بخش‌ها */
 
 import { useCallback, useEffect, useState } from "react";
-import { ExternalLink, Loader2, LogOut, Terminal } from "lucide-react";
+import { ExternalLink, Loader2, LogOut, Music4, Terminal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { LoginForm } from "@/components/site/admin/login-form";
@@ -97,6 +97,17 @@ export default function AdminPage() {
           </div>
 
           <div className="flex items-center gap-2">
+            <Button
+              asChild
+              variant="outline"
+              size="sm"
+              className="h-9 rounded-full border-zinc-700 bg-transparent text-xs text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
+            >
+              <a href="/sher-admin" target="_blank" rel="noopener noreferrer">
+                <Music4 className="h-3.5 w-3.5" aria-hidden="true" />
+                شعر یادت نره
+              </a>
+            </Button>
             <Button
               asChild
               variant="outline"

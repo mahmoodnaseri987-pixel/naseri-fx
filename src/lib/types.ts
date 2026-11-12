@@ -232,6 +232,9 @@ export type PicViewType = import("@/lib/pic-shared").PicView;
 /* بازی «منچ» — تختهٔ گروهی؛ همه چیز بازی برای همه دیده می‌شود */
 export type LudoViewType = import("@/lib/ludo-shared").LudoView;
 
+/* بازی «شعر یادت نره» — جواب دور در فازهای listen/guess مخفی است */
+export type SherViewType = import("@/lib/sher-shared").SherView;
+
 export type ArenaStateResponse = {
   now: number;
   me: string;
@@ -252,6 +255,7 @@ export type ArenaStateResponse = {
   jadval: JadvalViewType | null;
   pic: PicViewType | null;
   ludo: LudoViewType | null;
+  sher: SherViewType | null;
 };
 
 /* ---------- چت (لابی عمومی و داخل اتاق) ---------- */

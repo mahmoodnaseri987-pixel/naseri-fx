@@ -12,13 +12,14 @@ import { NABARD_GAME_SLUG } from "@/lib/nabard-engine";
 import { JADVAL_GAME_SLUG } from "@/lib/jadval-shared";
 import { PIC_GAME_SLUG } from "@/lib/pic-shared";
 import { LUDO_GAME_SLUG } from "@/lib/ludo-shared";
+import { SHER_GAME_SLUG } from "@/lib/sher-shared";
 import { getArenaGameDef } from "@/lib/arena-registry";
 import { housekeeping } from "@/lib/arena-server";
 import { getArenaCatalog, isRoomGameEnabled } from "@/lib/arena-catalog";
 import type { ArenaRoomSummary } from "@/lib/types";
 
 /* «میدان آتش» آنلاین کنار گذاشته شد — نسخه آفلاین تک‌نفره در /fire سرو می‌شود */
-const GAME_SLUGS = new Set([ARENA_GAME_SLUG, NABARD_GAME_SLUG, JADVAL_GAME_SLUG, PIC_GAME_SLUG, LUDO_GAME_SLUG]);
+const GAME_SLUGS = new Set([ARENA_GAME_SLUG, NABARD_GAME_SLUG, JADVAL_GAME_SLUG, PIC_GAME_SLUG, LUDO_GAME_SLUG, SHER_GAME_SLUG]);
 const MAX_ACTIVE_ROOMS = 30;
 
 export async function GET() {

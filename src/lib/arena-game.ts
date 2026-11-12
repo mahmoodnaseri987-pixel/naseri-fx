@@ -18,7 +18,7 @@ export const MAX_POINTS = 120; // امتیاز هر پاسخ درست (۶۰ پا
    (نبرد دایره‌ها) شرکت نمی‌کنند. memberId ربات‌ها با این پیشوند شروع می‌شود
    و هرگز Member واقعی نیستند — حضورشان فقط داخل ردیف RoomMember است. */
 export const BOT_PREFIX = "bot-";
-export const BOT_GAMES: ReadonlySet<string> = new Set([ARENA_GAME_SLUG, "jadval-race", "pic-guess", "ludo"]);
+export const BOT_GAMES: ReadonlySet<string> = new Set([ARENA_GAME_SLUG, "jadval-race", "pic-guess", "ludo", "sher"]);
 export const BOT_NAMES: readonly string[] = [
   "ربات آریا",
   "ربات سینا",
