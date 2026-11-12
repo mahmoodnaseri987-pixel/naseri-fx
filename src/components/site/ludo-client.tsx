@@ -68,10 +68,14 @@ import type { ArenaStateResponse } from "@/lib/types";
 const CELL = 40;
 const BOARD = CELL * 15;
 
-/* ریتم بازی — تاس دقیقاً یک‌بار برای هر پرتاب می‌چرخد، روی عدد سرور می‌ایستد
-   و ۲ثانیه ثابت می‌ماند؛ بعد حرکت مهره‌ها دیده می‌شود و نوبت بعدی اعلام می‌گردد */
-const ROLL_SPIN_MS = 1400; // یک چرخش کامل برای هر پرتاب — نه بیشتر
+/* ریتم بازی — تاس با کلیک همان لحظه می‌چرخد (بدون انتظار شبکه)، با یک
+   انتقال کاهنده روی عدد واقعی سرور فرود می‌آید و ۲ثانیه ثابت می‌ماند؛
+   بعد حرکت مهره‌ها دیده می‌شود و نوبت بعدی اعلام می‌گردد */
+const ROLL_SPIN_MS = 1500; // مدت چرخش تا فرود روی عدد سرور — آرام و خوانا
+const ROLL_LAND_MIN_MS = 500; // حداقل زمان فرود بعد از رسیدن عدد سرور
+const OPTIMISTIC_GLIDE_MS = 1050; // هر فاز چرخش خوش‌بینانه تا رسیدن عدد سرور
 const SETTLE_MS = 2000; // مکث فرود — عدد حداقل ۲ثانیه روی زمین ثابت دیده می‌شود
+const SURPRISE_PAUSE_MS = 1050; // مکث روی خانهٔ سورپرایز + نوشتهٔ اثر بالای مهره
 const STEP_MS = 430; // فاصلهٔ هر گام مهره — نرم و قابل‌مشاهده
 
 /** جای نشان صاحب پایگاه — روی نوار بیرونی هر پایگاه (درصد اندازهٔ تخته) */
@@ -128,24 +132,37 @@ const PIP_MAP: Record<number, readonly [number, number][]> = {
   6: [[-1, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [1, 1]],
 };
 
-/** چرخش مکعب برای نمایش هر وجه در جلو */
-const DIE_FACE_ROTATION: Record<number, string> = {
-  1: "rotateX(0deg) rotateY(0deg)",
-  2: "rotateX(-90deg) rotateY(0deg)",
-  3: "rotateX(0deg) rotateY(-90deg)",
-  4: "rotateX(0deg) rotateY(90deg)",
-  5: "rotateX(90deg) rotateY(0deg)",
-  6: "rotateX(0deg) rotateY(180deg)",
+/** زاویهٔ هر وجه در جلو — مقصد نهایی فرود تاس (مضرب ۹۰؛ عدد کاملاً ثابت و خوانا) */
+const DIE_FACE_ROT: Record<number, { x: number; y: number }> = {
+  1: { x: 0, y: 0 },
+  2: { x: -90, y: 0 },
+  3: { x: 0, y: -90 },
+  4: { x: 0, y: 90 },
+  5: { x: 90, y: 0 },
+  6: { x: 0, y: 180 },
 };
 
-/** تاس سه‌بعدی CSS — چرخش نرم و آهسته هنگام پرتاب، فرود روی عدد واقعی سرور */
-function Die3D({ v, rolling, settle }: { v: number; rolling: boolean; settle: boolean }) {
+/** نوشتهٔ اثر خانهٔ سورپرایز بالای مهره — نقش «خانهٔ جایزه» را روشن می‌کند */
+const SURPRISE_FX_INFO: Record<LudoSurpriseKind, { text: string; bg: string; edge: string }> = {
+  fwd4: { text: "۴ خانه جلو!", bg: "#ffe9a8", edge: "#e8a021" },
+  fwd3: { text: "۳ خانه جلو!", bg: "#ffe9a8", edge: "#e8a021" },
+  back4: { text: "۴ خانه عقب!", bg: "#ffd6d3", edge: "#e2453c" },
+  back3: { text: "۳ خانه عقب!", bg: "#ffd6d3", edge: "#e2453c" },
+  again: { text: "پرتاب دوباره!", bg: "#d6f5e3", edge: "#2fae5f" },
+};
+
+/** تاس سه‌بعدی CSS — چرخش و فرود با زاویهٔ انباشته از والد کنترل می‌شود؛
+    انتقال کاهنده یعنی تاس آرام‌آرام روی عدد سرور می‌نشیند و ثابت می‌ماند */
+function Die3D({
+  dieStyle,
+  settle,
+}: {
+  dieStyle: { transform: string; transition?: string };
+  settle: boolean;
+}) {
   return (
     <div className={`ludo-die-scene ${settle ? "ludo-die-settle" : ""}`} aria-hidden="true">
-      <div
-        className={`ludo-die ${rolling ? "ludo-die-rolling" : ""}`}
-        style={rolling ? undefined : { transform: DIE_FACE_ROTATION[v] }}
-      >
+      <div className="ludo-die" style={dieStyle}>
         {([1, 2, 3, 4, 5, 6] as const).map((f) => (
           <div key={f} className={`ludo-die-face ludo-die-face-${f}`}>
             {PIP_MAP[f]?.map(([px, py], i) => (
@@ -191,6 +208,14 @@ export function LudoClient({
   const prevStepsRef = useRef<Record<string, number[]>>({});
   const animToken = useRef(0);
   const [flash, setFlash] = useState<{ key: string; color: string; at: number } | null>(null);
+  /* نوشتهٔ اثر خانهٔ سورپرایز بالای مهره — برای درک نقش «خانهٔ جایزه» */
+  const [surpriseFx, setSurpriseFx] = useState<{ x: number; y: number; kind: LudoSurpriseKind; at: number } | null>(null);
+  useEffect(() => {
+    if (!surpriseFx) return;
+    const id = window.setTimeout(() => setSurpriseFx(null), SURPRISE_PAUSE_MS + 300);
+    return () => window.clearTimeout(id);
+  }, [surpriseFx]);
+
 
   /* رد رنگی — خانه‌ها با عبور/فرود مهره به رنگ همان مهره در می‌آیند */
   type Tint = { id: number; col: number; row: number; color: string; strong: boolean };
@@ -303,7 +328,8 @@ export function LudoClient({
     }
 
     /* زنجیرهٔ گام‌ها برای هر مهرهٔ تغییرکرده — هر گام پرچم «قدم واقعی» دارد */
-    type ChainStep = { p: XY; hop: boolean; color?: LudoColor };
+    type ChainStep = { p: XY; hop: boolean; color?: LudoColor; pause?: LudoSurpriseKind };
+
     const chains: Record<string, ChainStep[]> = {};
     for (const [pid, steps] of Object.entries(l.pieces)) {
       const color = colorOf[pid];
@@ -320,19 +346,33 @@ export function LudoClient({
           chains[key] = [0.33, 0.66].map((t) => ({ p: lerp(from, to, t), hop: false }));
           chains[key].push({ p: to, hop: false });
         } else {
-          const sum = diceV ?? Math.abs(s - b);
+          const diceSteps = diceV ?? Math.abs(s - b);
           const chain: ChainStep[] = [];
-          for (let k = 1; k <= sum; k++) {
+          for (let k = 1; k <= diceSteps; k++) {
             const h = b + k;
             chain.push({ p: stepPoint(color, h, i), hop: h < LUDO_HOME_STEP, color });
           }
-          if (chain.length === 0 || Math.abs(s - b) !== sum) {
-            /* سورپرایز مسیر را عوض کرده — دو گام مستقیم تا مقصد نهایی */
+          /* فرود روی خانهٔ سورپرایز («خانهٔ جایزه»)؟ — مهره روی همان خانه مکث
+             می‌کند و نوشتهٔ اثر («۳ خانه جلو!» و مانند آن) بالای مهره نشان
+             داده می‌شود تا همه بفهمند چه اتفاقی افتاده؛ بعد مسیر تا مقصد
+             نهایی ادامه می‌یابد. همین زنجیره توضیح «زدن با عدد دیگر» است. */
+          const landStep = b + diceSteps;
+          const landAbs = ludoAbsCellOf(color, landStep);
+          const surp = diceV !== null && landAbs !== null ? l.surprise.find((sv) => sv.cell === landAbs) : undefined;
+          if (surp) {
+            chain[chain.length - 1].pause = surp.kind;
+            if (s !== landStep) {
+              const dir = Math.sign(s - landStep);
+              for (let k = 1; k <= Math.abs(s - landStep); k++) {
+                const h = landStep + dir * k;
+                chain.push({ p: stepPoint(color, h, i), hop: h < LUDO_HOME_STEP, color });
+              }
+            }
+          } else if (chain.length === 0 || Math.abs(s - b) !== diceSteps) {
             const last = chain[chain.length - 1]?.p ?? from;
-            chains[key] = [...chain, { p: lerp(last, to, 0.5), hop: false }, { p: to, hop: false }];
-          } else {
-            chains[key] = chain;
+            chain.push({ p: lerp(last, to, 0.5), hop: false }, { p: to, hop: false });
           }
+          chains[key] = chain;
         }
       });
     }
@@ -341,29 +381,41 @@ export function LudoClient({
     (async () => {
       const cur = { ...posRef.current };
       const keys = Object.keys(chains);
-      for (let step = 0; step < 14; step++) {
-        if (animToken.current !== myToken) return;
-        let moved = false;
-        let anyHop = false;
-        for (const key of keys) {
-          const nxt = chains[key]?.[step];
-          if (nxt) {
-            cur[key] = nxt.p;
-            moved = true;
-            if (nxt.hop && nxt.color !== undefined) {
-              anyHop = true;
-              const col = Math.round(nxt.p[0] / CELL - 0.5);
-              const row = Math.round(nxt.p[1] / CELL - 0.5);
-              addTint(col, row, LUDO_COLOR_INFO[nxt.color].base, false);
-            }
+    for (let step = 0; step < 14; step++) {
+      if (animToken.current !== myToken) return;
+      let moved = false;
+      let anyHop = false;
+      let pauseKind: LudoSurpriseKind | null = null;
+      let pausePos: XY | null = null;
+      for (const key of keys) {
+        const nxt = chains[key]?.[step];
+        if (nxt) {
+          cur[key] = nxt.p;
+          moved = true;
+          if (nxt.hop && nxt.color !== undefined) {
+            anyHop = true;
+            const col = Math.round(nxt.p[0] / CELL - 0.5);
+            const row = Math.round(nxt.p[1] / CELL - 0.5);
+            addTint(col, row, LUDO_COLOR_INFO[nxt.color].base, false);
+          }
+          if (nxt.pause) {
+            pauseKind = nxt.pause;
+            pausePos = nxt.p;
           }
         }
-        if (!moved) break;
-        posRef.current = { ...cur };
-        forceRender((x) => x + 1);
-        if (anyHop) sfxHop(); // صدای قدم در هر خانه
-        await new Promise((r) => setTimeout(r, STEP_MS));
       }
+      if (!moved) break;
+      posRef.current = { ...cur };
+      forceRender((x) => x + 1);
+      if (anyHop) sfxHop(); // صدای قدم در هر خانه
+      await new Promise((r) => setTimeout(r, STEP_MS));
+      /* مکث کوتاه روی خانهٔ سورپرایز + نوشتهٔ اثر بالای مهره */
+      if (pauseKind && pausePos && animToken.current === myToken) {
+        setSurpriseFx({ x: pausePos[0], y: pausePos[1], kind: pauseKind, at: Date.now() });
+        await new Promise((r) => setTimeout(r, SURPRISE_PAUSE_MS));
+      }
+    }
+
       if (animToken.current !== myToken) return;
       posRef.current = { ...posRef.current, ...targets };
       forceRender((x) => x + 1);
@@ -381,13 +433,16 @@ export function LudoClient({
   const movable = useMemo(() => new Set(legal.map((a) => a.piece)), [legal]);
   const hasEnter = legal.some((a) => a.kind === "enter");
 
-  /* ---------- ریتم تاس: دقیقاً یک چرخش برای هر پرتاب + مکث فرود ----------
-     کلید پرتاب، «at» سرور است (نه seq) — پس حرکت و پاس دیگر باعث چرخشِ
-     دوباره نمی‌شود؛ با برداشتن تاس از زمین هم چرخش نیمه‌کاره کامل
-     بازنشانی می‌شود تا تاس هرگز بی‌وقفه نچرخد و عدد نامشخص نماند. */
+  /* ---------- ریتم تاس: چرخش خوش‌بینانه + فرود نرم روی عدد سرور + مکث فرود ----------
+     با کلیک، چرخش همان لحظه آغاز می‌شود (بدون انتظار برای شبکه — لگ ندارد)؛
+     وقتی عدد سرور رسید، همین چرخش با یک انتقال کاهنده روی وجه واقعی فرود
+     می‌آید — هیچ چرخش دوباره‌ای در کار نیست، تاس روی عدد ثابت می‌ماند و
+     کلید پرتاب «at» سرور است (نه seq) تا حرکت و پاس باعث چرخش نشوند. */
   const [rolling, setRolling] = useState(false);
   const [settling, setSettling] = useState(false);
   const rollingRef = useRef(false);
+  const settlingRef = useRef(false);
+  const landedRef = useRef(true); // چرخش در جریان روی عدد واقعی فرود کرده؟
   const clickRollRef = useRef(false); // پرتابِ دستی خودم — صدای تاس در کلیک پخش شده
   const rollId = l.dice ? `${l.dice.at ?? "x"}:${l.dice.v}` : "";
   const lastRollIdRef = useRef("");
@@ -396,15 +451,71 @@ export function LudoClient({
     diceTimersRef.current.forEach((x) => window.clearTimeout(x));
     diceTimersRef.current = [];
   }, []);
-  const lastDiceVRef = useRef(6); // آخرین عدد زمین — بعد از برداشتن تاس هم تا پرتاب بعدی ثابت می‌ماند
-  if (l.dice) lastDiceVRef.current = l.dice.v;
+  const lastLandVRef = useRef(1); // آخرین وجه فرودشده — بعد از برداشتن تاس هم روی تاس می‌ماند
+
+  /* چرخش تاس با زاویهٔ انباشته — هر فرود دقیقاً روی وجه واقعی می‌نشیند */
+  const dieRotRef = useRef({ x: 0, y: 0 });
+  const [dieAnim, setDieAnim] = useState({ x: 0, y: 0, dur: 0, ease: "cubic-bezier(.16,.72,.22,1)" });
+  const spinStartRef = useRef(0);
+
+  /** فاز چرخش بدون عدد (انتظار برای پاسخ سرور) — چرخش پیوسته و روان */
+  const glideOnce = useCallback((dur: number) => {
+    const r = dieRotRef.current;
+    const nx = r.x + 250;
+    const ny = r.y + 320;
+    dieRotRef.current = { x: nx, y: ny };
+    setDieAnim({ x: nx, y: ny, dur, ease: "linear" });
+  }, []);
+
+  /** فرود نرم روی عدد واقعی — انتقال کاهنده تا وجه دقیق؛ تاس آرام روی عدد می‌نشیند */
+  const landDie = useCallback((v: number, dur: number, extraTurns: number) => {
+    const r = dieRotRef.current;
+    const f = DIE_FACE_ROT[v] ?? DIE_FACE_ROT[1];
+    const mod = (a: number) => ((a % 360) + 360) % 360;
+    const nx = r.x + mod(f.x - r.x) + 360 * extraTurns;
+    const ny = r.y + mod(f.y - r.y) + 360 * extraTurns;
+    dieRotRef.current = { x: nx, y: ny };
+    lastLandVRef.current = v;
+    landedRef.current = true;
+    setDieAnim({ x: nx, y: ny, dur, ease: "cubic-bezier(.16,.72,.22,1)" });
+  }, []);
+
+  /** پایان چرخش — مکث فرود؛ عدد دست‌کم ۲ثانیه ثابت و خوانا دیده می‌شود */
+  const beginSettle = useCallback((v: number) => {
+    rollingRef.current = false;
+    setRolling(false);
+    settlingRef.current = true;
+    setSettling(true);
+    if (v === 6) diceTimersRef.current.push(window.setTimeout(() => sfxDing(), 350)); // دینگ آوردن ۶
+    diceTimersRef.current.push(
+      window.setTimeout(() => {
+        settlingRef.current = false;
+        setSettling(false);
+      }, SETTLE_MS),
+    );
+  }, []);
+
+  /** چرخش خوش‌بینانهٔ بی‌پاسخ — بدون عدد، تاس به وجه قبلی برمی‌گردد */
+  const abortSpin = useCallback(() => {
+    if (!rollingRef.current) return;
+    clearDiceTimers();
+    landDie(lastLandVRef.current, 450, 0);
+    rollingRef.current = false;
+    setRolling(false);
+    settlingRef.current = false;
+    setSettling(false);
+  }, [clearDiceTimers, landDie]);
+
   useEffect(() => {
     if (!rollId) {
-      /* تاس از زمین برداشته شد (حرکت/پاس انجام شد) — هر چرخش یا مکثِ در جریان بسته می‌شود */
+      /* تاس از زمین برداشته شد (حرکت/پاس) — وجه فرودشده روی تاس می‌ماند تا پرتاب بعدی؛
+         هر چرخش یا مکثِ در جریان هم بسته می‌شود تا تاس هرگز بی‌وقفه نچرخد */
       if (lastRollIdRef.current) {
         lastRollIdRef.current = "";
-        rollingRef.current = false;
         clearDiceTimers();
+        rollingRef.current = false;
+        settlingRef.current = false;
+        landedRef.current = true;
         setRolling(false);
         setSettling(false);
       }
@@ -412,29 +523,38 @@ export function LudoClient({
     }
     if (lastRollIdRef.current === rollId) return;
     lastRollIdRef.current = rollId;
-    const v = l.dice?.v ?? 0;
-    /* یک چرخش یکتا تا فرود روی عدد سرور، سپس مکث کامل تا همه عدد را ببینند */
-    rollingRef.current = true;
-    setRolling(true);
+    const v = l.dice?.v ?? 1;
+    /* مکث فرود قبلی (اگر هنوز تمام نشده) همین‌جا بسته می‌شود — چرخش تازه آغاز می‌شود */
+    clearDiceTimers();
+    settlingRef.current = false;
     setSettling(false);
     if (!clickRollRef.current) sfxDice();
     clickRollRef.current = false;
-    const t1 = window.setTimeout(() => {
-      rollingRef.current = false;
-      setRolling(false);
-      setSettling(true);
-      if (v === 6) diceTimersRef.current.push(window.setTimeout(() => sfxDing(), 350)); // دینگ آوردن ۶
-      diceTimersRef.current.push(window.setTimeout(() => setSettling(false), SETTLE_MS));
-    }, ROLL_SPIN_MS);
-    diceTimersRef.current.push(t1);
+    if (rollingRef.current) {
+      /* چرخش خوش‌بینانه در جریان است — با بودجهٔ زمانی باقی‌مانده روی عدد واقعی فرود می‌آید */
+      const elapsed = Date.now() - spinStartRef.current;
+      const remaining = Math.max(ROLL_LAND_MIN_MS, ROLL_SPIN_MS - elapsed);
+      landDie(v, remaining, 1);
+      diceTimersRef.current.push(window.setTimeout(() => beginSettle(v), remaining));
+    } else {
+      /* تماشاگرها یا پاسخِ رسیده به سکون — یک چرخش کامل کاهنده تا فرود روی عدد سرور */
+      rollingRef.current = true;
+      landedRef.current = false;
+      setRolling(true);
+      landDie(v, ROLL_SPIN_MS, 1);
+      diceTimersRef.current.push(window.setTimeout(() => beginSettle(v), ROLL_SPIN_MS));
+    }
     return clearDiceTimers;
-  }, [rollId, clearDiceTimers]);
+  }, [rollId, clearDiceTimers, landDie, beginSettle]);
 
   /* پاس خودکار وقتی هیچ حرکتی ممکن نیست — ولی فقط بعد از مکث فرود تاس،
-     تا بازیکن عدد تاس را ببیند و نوبت جلوی چشمش رد نشود */
+     تا بازیکن عدد تاس را ببیند و نوبت جلوی چشمش رد نشود. گارد با
+     پرچم‌های زنده (ref) است نه مقدار کهنهٔ رندر — وگرنه پاس بلافاصله بعد
+     از رسیدن تاس می‌پرید، چرخش نیمه‌کاره قطع می‌شد و عدد هرگز دیده نمی‌شد. */
   const passSeqRef = useRef(-1);
   useEffect(() => {
-    if (!myTurn || !l.dice || l.finished || rolling || settling) return;
+    if (!myTurn || !l.dice || l.finished) return;
+    if (rollingRef.current || settlingRef.current) return;
     if (legal.length === 0 && passSeqRef.current !== l.seq) {
       passSeqRef.current = l.seq;
       void sendAction({ type: "ludo_pass" });
@@ -467,18 +587,43 @@ export function LudoClient({
 
   /* ---------- اکشن‌ها ---------- */
   const roll = useCallback(async () => {
-    if (!myTurn || l.dice || rollingRef.current || l.finished) return;
-    /* فقط پرچم صدای کلیک روشن می‌شود؛ چرخش تنها با تأیید سرور و یک‌بار
-       در اثرِ «کلید پرتاب» آغاز می‌شود — هیچ چرخش اضافه‌ای در کار نیست */
+    if (!myTurn || l.dice || rollingRef.current || settlingRef.current || l.finished) return;
+
     clickRollRef.current = true;
     sfxDice();
+    /* چرخش خوش‌بینانه — همان لحظهٔ کلیک آغاز می‌شود؛ هیچ انتظاری برای شبکه
+       در کار نیست. وقتی عدد سرور رسید، همین چرخش روی عدد واقعی فرود می‌آید. */
+    landedRef.current = false;
+    rollingRef.current = true;
+    settlingRef.current = false;
+    setRolling(true);
+    setSettling(false);
+    spinStartRef.current = Date.now();
+    glideOnce(OPTIMISTIC_GLIDE_MS);
+    const chainGlide = () => {
+      if (!rollingRef.current || landedRef.current) return;
+      glideOnce(OPTIMISTIC_GLIDE_MS);
+      diceTimersRef.current.push(window.setTimeout(chainGlide, OPTIMISTIC_GLIDE_MS - 40));
+    };
+    diceTimersRef.current.push(window.setTimeout(chainGlide, OPTIMISTIC_GLIDE_MS - 40));
+    /* امانی — اگر پاسخ سرور هرگز نرسد، چرخش به وجه قبلی برمی‌گردد */
+    diceTimersRef.current.push(
+      window.setTimeout(() => {
+        if (rollingRef.current && !landedRef.current) abortSpin();
+      }, OPTIMISTIC_GLIDE_MS * 3 + 400),
+    );
     const ok = await sendAction({ type: "ludo_roll" });
-    if (!ok) clickRollRef.current = false;
+    if (!ok) {
+      clickRollRef.current = false;
+      abortSpin();
+    }
+
     /* پشتیبان — اگر حالت سرور نرسید، پرچم صدا خودکار پاک شود */
     window.setTimeout(() => {
       clickRollRef.current = false;
     }, 4000);
-  }, [myTurn, l.dice, l.finished, sendAction]);
+  }, [myTurn, l.dice, l.finished, sendAction, glideOnce, abortSpin]);
+
 
   const [shakeKey, setShakeKey] = useState<string | null>(null);
   const movePiece = useCallback(
@@ -653,9 +798,11 @@ export function LudoClient({
         @media (max-width: 639px) { .ludo-die-scene { transform: scale(.84); margin: -7px; } }
         .ludo-die-settle { animation: ludoSettlePop .95s ease-out; }
         @keyframes ludoSettlePop { 0% { transform: scale(1) } 30% { transform: scale(1.14); filter: drop-shadow(0 0 10px rgba(251,191,36,.65)) } 100% { transform: scale(1) } }
-        .ludo-die { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; transition: transform .6s cubic-bezier(.2,.8,.3,1.1); }
-        .ludo-die-rolling { animation: ludoTumble 1.4s cubic-bezier(.45,.1,.55,.9) infinite; }
-        @keyframes ludoTumble { 0% { transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg) } 100% { transform: rotateX(720deg) rotateY(720deg) rotateZ(360deg) } }
+        .ludo-die { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; }
+
+        .ludo-surprise-fx { animation: ludoSurpriseFx 1.2s ease-out forwards; transform-box: fill-box; transform-origin: center; }
+        @keyframes ludoSurpriseFx { 0% { opacity: 0; transform: scale(.45) } 16% { opacity: 1; transform: scale(1.14) } 28% { transform: scale(1) } 80% { opacity: 1; transform: scale(1) } 100% { opacity: 0; transform: scale(1.08) } }
+
         .ludo-die-face { position: absolute; inset: 0; border-radius: 14px; background: linear-gradient(150deg,#fffef8 0%,#f6ecd2 55%,#e4d3aa 100%); border: 1px solid #c9b78d; box-shadow: inset 0 0 12px rgba(255,255,255,.8), inset 0 -3px 8px rgba(176,146,86,.4); }
         .ludo-die-face-1 { transform: translateZ(32px) }
         .ludo-die-face-6 { transform: rotateY(180deg) translateZ(32px) }
@@ -949,6 +1096,29 @@ export function LudoClient({
                 </g>
               );
             })}
+            {/* نوشتهٔ اثر خانهٔ سورپرایز بالای مهره — نقش «خانهٔ جایزه» را نشان می‌دهد */}
+            {surpriseFx && (
+              <g
+                transform={`translate(${Math.min(500, Math.max(100, surpriseFx.x))}, ${Math.max(36, surpriseFx.y - 32)})`}
+                textAnchor="middle"
+              >
+                <g key={`sf${surpriseFx.at}`} className="ludo-surprise-fx">
+                  <rect
+                    x="-66"
+                    y="-17"
+                    width="132"
+                    height="34"
+                    rx="17"
+                    fill={SURPRISE_FX_INFO[surpriseFx.kind].bg}
+                    stroke={SURPRISE_FX_INFO[surpriseFx.kind].edge}
+                    strokeWidth="2.2"
+                  />
+                  <text x="0" y="6" fontSize="17" fontWeight="800" fill="#2a1607">
+                    {SURPRISE_FX_INFO[surpriseFx.kind].text}
+                  </text>
+                </g>
+              </g>
+            )}
           </svg>
 
           {/* آواتار صاحب هر رنگ — گوشهٔ پایگاه خودش */}
@@ -1141,7 +1311,14 @@ export function LudoClient({
             }
             aria-label={L.yourTurn}
           >
-            <Die3D v={l.dice?.v ?? lastDiceVRef.current} rolling={rolling} settle={settling} />
+            <Die3D
+              dieStyle={{
+                transform: `rotateX(${dieAnim.x}deg) rotateY(${dieAnim.y}deg)`,
+                transition: dieAnim.dur > 0 ? `transform ${dieAnim.dur}ms ${dieAnim.ease}` : "none",
+              }}
+              settle={settling}
+            />
+
           </button>
         </div>
       </div>
