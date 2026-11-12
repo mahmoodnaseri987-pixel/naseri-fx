@@ -265,7 +265,7 @@ export const dict = {
       },
       sher: {
         lobbyHint:
-          "هر دور یک کلیپ ۱۰ثانیه‌ای از آهنگ پخش می‌شود و ناگهان قطع می‌شود؛ هر کس «بیت بعدی» را درست حدس بزند امتیاز می‌گیرد. چهار سطح کمک: حدس کامل تایپی ۲۵ امتیاز، نمایان‌شدن کلمهٔ اول ۱۵ امتیاز، کلمهٔ اول و آخر ۱۰ امتیاز و چهارگزینه‌ای ۵ امتیاز؛ پاسخ نادرست صفر است. هر بازیکن در هر دور فقط یک‌بار جواب می‌دهد و سطح انتخابی تا پایان دور ثابت است. پیش‌فرض ۱۰ دور؛ مسابقه بدون تکرار آهنگ برگزار می‌شود.",
+          "هر دور یک کلیپ ۲۰ثانیه‌ای از آهنگ پخش می‌شود و ناگهان قطع می‌شود؛ هر کس «بیت بعدی» را درست حدس بزند امتیاز می‌گیرد. چهار سطح کمک: حدس کامل تایپی ۲۵ امتیاز، نمایان‌شدن کلمهٔ اول ۱۵ امتیاز، کلمهٔ اول و آخر ۱۰ امتیاز و چهارگزینه‌ای ۵ امتیاز؛ پاسخ نادرست صفر است. هر بازیکن در هر دور فقط یک‌بار جواب می‌دهد و سطح انتخابی تا پایان دور ثابت است. پیش‌فرض ۱۰ دور؛ مسابقه بدون تکرار آهنگ برگزار می‌شود.",
         modeTitle: "حالت مسابقه",
         modeFfa: "انفرادی",
         modeM1v1: "نبرد تک‌به‌تک",
@@ -790,7 +790,7 @@ export const dict = {
       },
       sher: {
         lobbyHint:
-          "Each round plays a 10-second clip of a song and cuts off abruptly; whoever guesses the next verse correctly scores. Four help levels: full typed guess 25 points, first word revealed 15, first and last words 10, multiple-choice 5; a wrong answer scores zero. Every player answers once per round and the chosen level is locked for the round. The default is 10 rounds and songs never repeat within a match.",
+          "Each round plays a 20-second clip of a song and cuts off abruptly; whoever guesses the next verse correctly scores. Four help levels: full typed guess 25 points, first word revealed 15, first and last words 10, multiple-choice 5; a wrong answer scores zero. Every player answers once per round and the chosen level is locked for the round. The default is 10 rounds and songs never repeat within a match.",
         modeTitle: "Match mode",
         modeFfa: "Free-for-all",
         modeM1v1: "1 vs 1 duel",

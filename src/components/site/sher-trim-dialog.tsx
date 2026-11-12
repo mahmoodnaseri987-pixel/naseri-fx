@@ -1,8 +1,8 @@
 "use client";
 
-/* دیالوگ «قیچی کلیپ» برای بازی «شعر یادت نره» — انتخاب دقیق پنجرهٔ ۱۰ثانیه‌ای
+/* دیالوگ «قیچی کلیپ» برای بازی «شعر یادت نره» — انتخاب دقیق پنجرهٔ ۲۰ثانیه‌ای
    روی موج‌نگارِ فایل صوتی. طول کلیپ در موتور بازی ثابت است (فقط شروع قابل
-   انتخاب است)، پس این‌جا پنجره‌ای با عرض ثابتِ ۱۰ ثانیه روی موج جابه‌جا می‌شود:
+   انتخاب است)، پس این‌جا پنجره‌ای با عرض ثابتِ ۲۰ ثانیه روی موج جابه‌جا می‌شود:
    کشیدن لبه‌ها یا خود پنجره با Pointer Events (موس + لمس)، کلیک بیرون پنجره
    آن را به نقطهٔ کلیک می‌برد. پیش‌نمایش پخش با یک audio مستقل داخل دیالوگ است. */
 
@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-const CLIP_SECONDS = 10; // طول ثابت کلیپ در موتور بازی
+const CLIP_SECONDS = 20; // طول ثابت کلیپ در موتور بازی
 const WAVE_H = 96; // ارتفاع موج‌نگار (px)
 const EDGE_PX = 8; // فاصلهٔ نزدیک لبه برای گرفتن لبهٔ پنجره
 const PEAK_BUCKETS = 1000; // تعداد باکت‌های موج
@@ -464,7 +464,7 @@ export function SherTrimDialog({
               <Scissors className="h-4 w-4 text-emerald-400" aria-hidden="true" />
             </span>
             <div>
-              <p className="text-sm font-bold text-zinc-100">قیچی کلیپ — پنجرهٔ ۱۰ ثانیه‌ای</p>
+              <p className="text-sm font-bold text-zinc-100">قیچی کلیپ — پنجرهٔ ۲۰ ثانیه‌ای</p>
               <p className="mt-0.5 font-mono text-[11px] text-zinc-500" dir="ltr">
                 {filename}
               </p>
@@ -580,7 +580,7 @@ export function SherTrimDialog({
                   <span className="text-zinc-200" dir="ltr">
                     {fmt1(endSec)}
                   </span>{" "}
-                  ثانیه ({win === CLIP_SECONDS ? "۱۰" : fmt1(win)} ثانیه)
+                  ثانیه ({win === CLIP_SECONDS ? "۲۰" : fmt1(win)} ثانیه)
                 </p>
               </div>
 

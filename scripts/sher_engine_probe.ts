@@ -172,7 +172,7 @@ if (!st) process.exit(1);
 
 assert(st.game === "sher" && st.mode === "t4x2", "شناسهٔ بازی/مود خراب است");
 assert(st.startedAtMs === now0 + 4_000, "شمارش معکوس شروع ۴ثانیه‌ای رعایت نشده");
-assert(st.phase === "listen" && st.phaseEnds === st.startedAtMs + SHER_LISTEN_MS, "فاز اول listen با پایان ۱۰ثانیه‌ای نیست");
+assert(st.phase === "listen" && st.phaseEnds === st.startedAtMs + SHER_LISTEN_MS, "فاز اول listen با پایان ۲۰ثانیه‌ای نیست");
 assert(st.totalRounds === Math.min(SHER_MAX_ROUNDS, 5) && st.totalRounds === 5, "تعداد دورها باید min(10, آهنگ‌ها)=۵ باشد");
 assert(st.round === 1 && st.seq === 1 && st.result === null, "وضعیت شروع خراب است");
 

@@ -248,7 +248,7 @@ model SherSong {
   filename     String   @unique // نام فایل در public/sher/songs — کلید مچ با پوشه
   title        String   @default("")
   artist       String   @default("")
-  clipStart    Float    @default(0) // ثانیهٔ شروع کلیپ ۱۰ثانیه‌ای
+  clipStart    Float    @default(0) // ثانیهٔ شروع کلیپ ۲۰ثانیه‌ای
   answerLine   String   @default("") // مصرع/بیت بعدی که باید حدس زده شود
   contextLines String   @default("[]") // JSON: ۱ تا ۳ مصرعِ قبل — زیرنویس حین پخش
   extraLines   String   @default("[]") // JSON: مصرع‌های دیگر همین آهنگ — خوراک گزینهٔ انحرافی
