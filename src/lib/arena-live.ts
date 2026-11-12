@@ -902,7 +902,7 @@ export function viewFromSnapshot(
       hostId: room.hostId,
       maxPlayers: room.maxPlayers,
       ageGroup: room.ageGroup,
-      ludoTeams: ludoTeamsFlagOf(room.state) || (ludo?.teams ?? false),
+      ludoTeams: ludoTeamsFlagOf(snap.rawState) || (ludo?.teams ?? false),
     },
     members,
     game,
