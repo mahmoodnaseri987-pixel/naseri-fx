@@ -249,11 +249,8 @@ export function SherTrimDialog({
     })();
     return () => {
       cancelled = true;
-      try {
-        ctx?.close();
-      } catch {
-        /* نادیده */
-      }
+      /* close ممکن است پس از بسته‌شدن قبلی رد شود — خطای بی‌ضرر؛ بی‌صدا نادیده */
+      void ctx?.close().catch(() => undefined);
     };
   }, [url]);
 

@@ -27,11 +27,11 @@ function b64url(s: string): string {
 }
 
 async function adminCookie(): Promise<string> {
-  const rows = await (db as unknown as {
-    $queryRawUnsafe: (q: string) => Promise<{ passwordHash: string }[]>;
-  }).$queryRawUnsafe<{ passwordHash: string }[]>(
-    `SELECT "passwordHash" FROM "Settings" WHERE id = 'main'`,
-  );
+  const rows = (await (db as unknown as {
+    $queryRawUnsafe: (q: string) => Promise<unknown>;
+  }).$queryRawUnsafe(`SELECT "passwordHash" FROM "Settings" WHERE id = 'main'`)) as {
+    passwordHash: string;
+  }[];
   const hash = rows[0]?.passwordHash;
   if (!hash) throw new Error("passwordHash در Settings نیست.");
   const payload = b64url(JSON.stringify({ exp: Date.now() + 7 * 24 * 3600 * 1000 }));
@@ -141,7 +141,7 @@ async function main(): Promise<void> {
     const demo2 = rows2.find((r) => r.filename === DEMO);
     check(
       "clipStart پس از ذخیره دست‌نخورده",
-      demo2 && Math.abs(demo2.clipStart - Number(d.clipStart)) < 0.001,
+      !!demo2 && Math.abs(demo2.clipStart - Number(d.clipStart)) < 0.001,
       demo2 ? String(demo2.clipStart) : "پیدا نشد",
     );
   }
