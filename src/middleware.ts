@@ -15,12 +15,15 @@ const MEMBER_COOKIE = "naseri_member";
 export function middleware(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
 
-  /* صفحات عمومی — ورود/ثبت‌نام و پنل مدیریت */
+  /* صفحات عمومی — ورود/ثبت‌نام، پنل مدیریت و پنل مدیریت شعر
+     (/sher-admin گیت رمز مستقل خودش را دارد — فرم ورود بخش شعر) */
   if (
     pathname === "/login" ||
     pathname.startsWith("/login/") ||
     pathname === "/admin" ||
-    pathname.startsWith("/admin/")
+    pathname.startsWith("/admin/") ||
+    pathname === "/sher-admin" ||
+    pathname.startsWith("/sher-admin/")
   ) {
     return NextResponse.next();
   }
