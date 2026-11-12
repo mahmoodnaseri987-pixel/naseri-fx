@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import path from "node:path";
 import { db } from "@/lib/db";
-import { guard } from "@/lib/admin";
+import { sherGuard } from "@/lib/sher-auth";
 import { githubPutFile } from "@/lib/sher-github";
 
 /* آپلود تکه‌تکهٔ فایل صوتی «شعر یادت نره» از پنل ادمین.
@@ -34,7 +34,7 @@ function audioFilename(v: unknown): string | null {
 }
 
 export async function POST(req: NextRequest) {
-  const denied = await guard();
+  const denied = await sherGuard();
   if (denied) return denied;
 
   /* جاروب تکه‌های یتیم آپلودهای نیمه‌کارهٔ بیش از یک شبانه‌روز — ارزان و هر بار اجرا می‌شود */

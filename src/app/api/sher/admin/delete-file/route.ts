@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import path from "node:path";
-import { guard } from "@/lib/admin";
+import { sherGuard } from "@/lib/sher-auth";
 import { githubDeleteFile } from "@/lib/sher-github";
 
 /* حذف فایل صوتی «شعر یادت نره» از مخزن گیت‌هاب — idempotent:
@@ -25,7 +25,7 @@ function audioFilename(v: unknown): string | null {
 }
 
 export async function POST(req: NextRequest) {
-  const denied = await guard();
+  const denied = await sherGuard();
   if (denied) return denied;
 
   let body: Record<string, unknown>;

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import path from "node:path";
 import { db } from "@/lib/db";
-import { guard } from "@/lib/admin";
+import { sherGuard } from "@/lib/sher-auth";
 
 /* ذخیرهٔ متادیتای یک آهنگ «شعر یادت نره» — upsert بر اساس نام فایل */
 
@@ -28,7 +28,7 @@ function cleanLines(v: unknown, max: number): string[] | null {
 const bad = (message: string) => NextResponse.json({ error: message }, { status: 400 });
 
 export async function POST(req: NextRequest) {
-  const denied = await guard();
+  const denied = await sherGuard();
   if (denied) return denied;
 
   let body: Record<string, unknown>;

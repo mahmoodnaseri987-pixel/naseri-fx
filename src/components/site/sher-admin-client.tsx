@@ -5,12 +5,14 @@
    شروع کلیپ، متن مصرع‌ها و فعال/غیرفعال کردن */
 
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
-import { Loader2, Music4, RefreshCw, Upload } from "lucide-react";
+import { Loader2, Music4, RefreshCw, Scissors, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { SherTrimDialog } from "@/components/site/sher-trim-dialog";
+import { SherLoginForm } from "@/components/site/sher-login-form";
 
 type SongStatus = "ready" | "draft" | "stale";
 
@@ -39,6 +41,14 @@ const field =
   "h-10 border-zinc-800 bg-zinc-950 text-right text-sm text-zinc-100 placeholder:text-zinc-600";
 
 const CHUNK_BYTES = 900 * 1024; // هر تکه ~۹۰۰ کیلوبایت — زیر سقف بدنهٔ ~۴.۵ مگابایتی ورکل
+
+/* ۴۰۱ از APIهای بخش شعر — به‌جای ریدایرکت به /admin، پنل با فرم ورود بخش شعر جایگزین می‌شود */
+class SherAuthError extends Error {}
+
+/* عدد با یک اعشار برای پیام‌ها و برچسب‌ها */
+function fmt1(n: number): string {
+  return (Math.round(n * 10) / 10).toFixed(1);
+}
 
 function formatSize(n: number): string {
   if (n < 1024) return `${n} بایت`;
@@ -107,6 +117,7 @@ function SongCard({
   const [toggling, setToggling] = useState(false);
   const [deletingFile, setDeletingFile] = useState(false);
   const [deletingRecord, setDeletingRecord] = useState(false);
+  const [trimOpen, setTrimOpen] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   /* پیش‌نویس فقط با تایپ کاربر تغییر می‌کند — به‌روزرسانی ردیف از بیرون (ذخیره/فعال‌سازی)
@@ -128,21 +139,38 @@ function SongCard({
     setDraft((d) => ({ ...d, clipStart: String(t) }));
   }
 
-  async function save() {
+  /* باز کردن دیالوگ قیچی — پخش‌کنندهٔ کارت تا بسته شدن دیالوگ pause می‌ماند */
+  function openTrim() {
+    audioRef.current?.pause();
+    setTrimOpen(true);
+  }
+
+  /* اعمال پنجرهٔ انتخاب‌شده در قیچی: ثبت در پیش‌نویس + همان مسیر ذخیرهٔ موجود کارت */
+  async function applyTrim(startSeconds: number) {
+    const v = String(Math.round(startSeconds * 10) / 10);
+    setDraft((d) => ({ ...d, clipStart: v }));
+    setTrimOpen(false);
+    const ok = await save({ clipStart: v });
+    if (ok) notify(`کلیپ از ${fmt1(startSeconds)} تا ${fmt1(startSeconds + 10)} ذخیره شد.`);
+  }
+
+  /* ذخیرهٔ متادیتا — overrides برای اعمال قیچی بدون رقابت با state پیش‌نویس */
+  async function save(overrides?: Partial<Draft>): Promise<boolean> {
+    const d = { ...draft, ...overrides };
     setSaving(true);
     setMsg(null);
     const payload = {
       filename: row.filename,
-      title: draft.title.trim(),
-      artist: draft.artist.trim(),
-      clipStart: Math.max(0, Number(draft.clipStart) || 0),
-      answerLine: draft.answerLine.trim(),
-      contextLines: draft.contextLines.map((s) => s.trim()).filter(Boolean),
-      extraLines: draft.extraText
+      title: d.title.trim(),
+      artist: d.artist.trim(),
+      clipStart: Math.max(0, Number(d.clipStart) || 0),
+      answerLine: d.answerLine.trim(),
+      contextLines: d.contextLines.map((s) => s.trim()).filter(Boolean),
+      extraLines: d.extraText
         .split("\n")
         .map((s) => s.trim())
         .filter(Boolean),
-      active: draft.active,
+      active: d.active,
     };
     try {
       const res = await fetch("/api/sher/admin/songs/upsert", {
@@ -154,8 +182,10 @@ function SongCard({
       if (!res.ok) throw new Error(data.error || "ذخیره ناموفق بود.");
       onPatch(row.filename, payload);
       setMsg({ ok: true, text: "ذخیره شد." });
+      return true;
     } catch (e) {
       setMsg({ ok: false, text: e instanceof Error ? e.message : "ذخیره ناموفق بود." });
+      return false;
     } finally {
       setSaving(false);
     }
@@ -321,6 +351,16 @@ function SongCard({
             >
               تنظیم زمان از لحظهٔ فعلی
             </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={openTrim}
+              className="h-10 rounded-xl border-zinc-700 bg-transparent text-xs text-zinc-300 hover:bg-zinc-800"
+            >
+              <Scissors className="h-3.5 w-3.5" aria-hidden="true" />
+              قیچی
+            </Button>
           </div>
 
           {/* عنوان و خواننده */}
@@ -408,7 +448,7 @@ function SongCard({
             <Button
               type="button"
               size="sm"
-              onClick={save}
+              onClick={() => save()}
               disabled={saving}
               className="h-9 rounded-xl bg-emerald-600 text-xs text-white hover:bg-emerald-500"
             >
@@ -456,6 +496,17 @@ function SongCard({
           </div>
         </div>
       )}
+
+      {/* دیالوگ قیچی کلیپ — فقط برای کارت‌های دارای فایل */}
+      {trimOpen && (
+        <SherTrimDialog
+          filename={row.filename}
+          url={`/sher/songs/${encodeURIComponent(row.filename)}`}
+          clipStart={Math.max(0, Number(draft.clipStart) || 0)}
+          onApply={applyTrim}
+          onClose={() => setTrimOpen(false)}
+        />
+      )}
     </div>
   );
 }
@@ -465,6 +516,7 @@ export function SherAdminClient() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [reloadKey, setReloadKey] = useState(0); // با هر refresh کامل، کارت‌ها ریمونت می‌شوند
+  const [needsLogin, setNeedsLogin] = useState(false); // ۴۰۱ → فرم ورود بخش شعر به‌جای ریدایرکت
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [picked, setPicked] = useState<File[]>([]);
@@ -478,7 +530,7 @@ export function SherAdminClient() {
     try {
       const res = await fetch("/api/sher/admin/songs");
       if (res.status === 401) {
-        window.location.href = "/admin";
+        setNeedsLogin(true); // نشست بخش شعر منقضی شده — کل پنل با فرم ورود جایگزین می‌شود
         return;
       }
       if (!res.ok) throw new Error();
@@ -534,13 +586,14 @@ export function SherAdminClient() {
           body: JSON.stringify({ uploadId, filename, total, index, data }),
         });
         if (res.status === 401) {
-          window.location.href = "/admin";
-          return;
+          setNeedsLogin(true); // نشست بخش شعر منقضی شده — آپلود نیمه‌کاره رها می‌شود
+          throw new SherAuthError();
         }
         const d = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
         if (res.ok && d.ok) return;
         lastErr = d.error || `خطای سرور (کد ${res.status})`;
-      } catch {
+      } catch (e) {
+        if (e instanceof SherAuthError) throw e;
         lastErr = "اتصال به سرور برقرار نشد.";
       }
       if (attempt === 0) await new Promise((r) => setTimeout(r, 800)); // پیش از تلاش مجدد کمی صبر
@@ -583,10 +636,14 @@ export function SherAdminClient() {
       setPicked([]);
       if (fileInputRef.current) fileInputRef.current.value = "";
     } catch (e) {
-      setUploadMsg({
-        ok: false,
-        text: e instanceof Error ? e.message : "آپلود ناموفق بود — دوباره تلاش کنید.",
-      });
+      if (e instanceof SherAuthError) {
+        setUploadMsg(null); // پنل با فرم ورود بخش شعر جایگزین می‌شود — پیام خطا لازم نیست
+      } else {
+        setUploadMsg({
+          ok: false,
+          text: e instanceof Error ? e.message : "آپلود ناموفق بود — دوباره تلاش کنید.",
+        });
+      }
     } finally {
       setUploading(false);
       setProgress("");
@@ -597,6 +654,9 @@ export function SherAdminClient() {
     setPicked(Array.from(e.target.files ?? []));
     setUploadMsg(null);
   }
+
+  /* نشست بخش شعر منقضی/نامعتبر است — کل پنل با فرم ورود بخش شعر جایگزین می‌شود */
+  if (needsLogin) return <SherLoginForm logout />;
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100" dir="rtl">

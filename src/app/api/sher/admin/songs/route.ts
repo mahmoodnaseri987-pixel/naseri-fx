@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { guard } from "@/lib/admin";
+import { sherGuard } from "@/lib/sher-auth";
 import manifest from "@/data/sher-manifest.json";
 
 /* فهرست مچ‌شدهٔ فایل‌های پوشه (manifest) با رکوردهای دیتابیس — پنل «شعر یادت نره» */
@@ -19,7 +19,7 @@ function parseLines(raw: string): string[] {
 }
 
 export async function GET() {
-  const denied = await guard();
+  const denied = await sherGuard();
   if (denied) return denied;
 
   const [records, files] = await Promise.all([

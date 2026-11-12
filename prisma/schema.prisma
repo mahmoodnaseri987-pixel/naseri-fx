@@ -37,6 +37,7 @@ model Settings {
   email        String   @default("")
   instagram    String   @default("") // آی‌دی اینستاگرام بدون @
   passwordHash String   @default("") // هش رمز پنل مدیریت (scrypt)
+  sherPasswordHash String @default("") // هش رمز بخش مدیریت شعر (scrypt) — خالی یعنی فقط مدیر کل
   logoUrl      String   @default("") // لوگوی سایت — آدرس داخلی (/api/media/...) یا لینک بیرونی
   bannerUrl    String   @default("") // تصویر بنر بالای سایت (هیرو)
   aboutImageUrl String  @default("") // تصویر بخش «درباره من»

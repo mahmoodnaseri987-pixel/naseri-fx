@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import path from "node:path";
 import { db } from "@/lib/db";
-import { guard } from "@/lib/admin";
+import { sherGuard } from "@/lib/sher-auth";
 
 /* حذف رکورد متادیتای یک آهنگ «شعر یادت نره» از دیتابیس —
    برای ردیف‌های «بدون فایل» که فایل صوتی‌شان دیگر در مخزن نیست. */
@@ -21,7 +21,7 @@ function simpleFilename(v: unknown): string | null {
 }
 
 export async function POST(req: NextRequest) {
-  const denied = await guard();
+  const denied = await sherGuard();
   if (denied) return denied;
 
   let body: Record<string, unknown>;

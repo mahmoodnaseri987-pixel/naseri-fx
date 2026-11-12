@@ -35,7 +35,7 @@ export function createToken(secret: string): string {
   return `${payload}.${sign(payload, secret)}`;
 }
 
-function verifyToken(token: string | undefined, secret: string): boolean {
+export function verifyToken(token: string | undefined, secret: string): boolean {
   if (!token) return false;
   const [payload, sig] = token.split(".");
   if (!payload || !sig) return false;
