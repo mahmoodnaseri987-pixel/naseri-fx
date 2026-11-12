@@ -30,6 +30,7 @@ import {
 import { useLang } from "@/components/site/language-provider";
 import { ChatPanel } from "@/components/site/chat-panel";
 import {
+  LUDO_AUTO_MOVE_MS,
   LUDO_BASE_ANCHORS,
   LUDO_BOT_MOVE_MIN,
   LUDO_BOT_MOVE_VAR,
@@ -671,6 +672,15 @@ export function LudoClient({
   const [rulesOpen, setRulesOpen] = useState(false);
   /* داشبورد چت داخل بازی */
   const [chatOpen, setChatOpen] = useState(false);
+  /* موبایل؟ چت به‌جای دکمهٔ شناور در نوار پایین صفحه می‌نشیند */
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 639px)");
+    const h = () => setIsMobile(mq.matches);
+    h();
+    mq.addEventListener("change", h);
+    return () => mq.removeEventListener("change", h);
+  }, []);
   const autoRules = useRef(false);
   useEffect(() => {
     if (!autoRules.current && countdown > 0 && countdown < LUDO_RULES_AUTO_MS) {
@@ -749,7 +759,9 @@ export function LudoClient({
   const windowMs = l.dice
     ? turnIsBot
       ? LUDO_BOT_MOVE_MIN + LUDO_BOT_MOVE_VAR
-      : LUDO_MOVE_MS
+      : l.dice.auto
+        ? LUDO_AUTO_MOVE_MS // تاس خودکار سرور (قطعی نت/مهلت گذشته) — حرکت هم زود خودکار می‌شود
+        : LUDO_MOVE_MS
     : turnIsBot
       ? LUDO_BOT_ROLL_MIN + LUDO_BOT_ROLL_VAR
       : LUDO_TURN_MS;
@@ -814,9 +826,9 @@ export function LudoClient({
       `}</style>
 
       <div
-        className={`mx-auto flex w-full flex-col items-center gap-3 px-3 pb-5 pt-3 ${
-          fs ? "min-h-dvh justify-center sm:gap-4" : "max-w-[620px]"
-        }`}
+        className={`mx-auto flex w-full flex-col items-center gap-3 px-3 pt-3 ${
+          isMobile ? "pb-24" : "pb-5" /* جای نوار چت پایین صفحه در موبایل */
+        } ${fs ? "min-h-dvh justify-center sm:gap-4" : "max-w-[620px]"}`}
       >
         {/* نوار آیکون‌ها — بدون هیچ نوشته‌ای */}
         <div className="flex w-full items-center justify-between gap-2">
@@ -1323,38 +1335,44 @@ export function LudoClient({
         </div>
       </div>
 
-      {/* ---------- داشبورد کوچک چت — داخل پوستهٔ بازی تا در تمام‌صفحه هم بماند ---------- */}
-      <div className="absolute bottom-3 start-3 z-50">
-        {chatOpen && (
-          <div className="mb-2 w-[min(300px,calc(100vw-24px))] overflow-hidden rounded-2xl border border-zinc-700/80 bg-zinc-950/90 shadow-2xl backdrop-blur">
-            <div className="flex items-center justify-between border-b border-zinc-800/80 px-3 py-1.5">
-              <span className="flex items-center gap-1.5 text-xs font-bold text-zinc-200">
-                <MessageCircle className="h-3.5 w-3.5 text-violet-400" aria-hidden="true" />
-                {t.chat.roomTitle}
-              </span>
-              <button
-                onClick={() => setChatOpen(false)}
-                aria-label="close chat"
-                className="rounded-full p-1 text-zinc-500 transition hover:text-zinc-200"
-              >
-                <X className="h-3.5 w-3.5" aria-hidden="true" />
-              </button>
+      {/* ---------- چت — موبایل: نوار چسبیده به پایین‌ترین قسمت صفحه / دسکتاپ: دکمهٔ شناور ---------- */}
+      {isMobile ? (
+        <div className="sticky bottom-0 z-50 w-full border-t border-zinc-800/80 bg-zinc-950/95 shadow-[0_-10px_28px_rgba(0,0,0,.5)] backdrop-blur">
+          <ChatPanel scope={st.room.code} dock hideHeader className="max-h-[46dvh]" />
+        </div>
+      ) : (
+        <div className="absolute bottom-3 start-3 z-50">
+          {chatOpen && (
+            <div className="mb-2 w-[min(300px,calc(100vw-24px))] overflow-hidden rounded-2xl border border-zinc-700/80 bg-zinc-950/90 shadow-2xl backdrop-blur">
+              <div className="flex items-center justify-between border-b border-zinc-800/80 px-3 py-1.5">
+                <span className="flex items-center gap-1.5 text-xs font-bold text-zinc-200">
+                  <MessageCircle className="h-3.5 w-3.5 text-violet-400" aria-hidden="true" />
+                  {t.chat.roomTitle}
+                </span>
+                <button
+                  onClick={() => setChatOpen(false)}
+                  aria-label="close chat"
+                  className="rounded-full p-1 text-zinc-500 transition hover:text-zinc-200"
+                >
+                  <X className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+              </div>
+              <ChatPanel scope={st.room.code} className="h-52" hideHeader />
             </div>
-            <ChatPanel scope={st.room.code} className="h-52" hideHeader />
-          </div>
-        )}
-        <button
-          onClick={() => setChatOpen((v) => !v)}
-          aria-label={t.chat.roomTitle}
-          className={`flex h-10 w-10 items-center justify-center rounded-full border shadow-lg transition-colors ${
-            chatOpen
-              ? "border-zinc-600 bg-zinc-800 text-zinc-200"
-              : "border-violet-400/40 bg-violet-500/90 text-zinc-950 hover:bg-violet-400"
-          }`}
-        >
-          {chatOpen ? <X className="h-4 w-4" aria-hidden="true" /> : <MessageCircle className="h-4 w-4" aria-hidden="true" />}
-        </button>
-      </div>
+          )}
+          <button
+            onClick={() => setChatOpen((v) => !v)}
+            aria-label={t.chat.roomTitle}
+            className={`flex h-10 w-10 items-center justify-center rounded-full border shadow-lg transition-colors ${
+              chatOpen
+                ? "border-zinc-600 bg-zinc-800 text-zinc-200"
+                : "border-violet-400/40 bg-violet-500/90 text-zinc-950 hover:bg-violet-400"
+            }`}
+          >
+            {chatOpen ? <X className="h-4 w-4" aria-hidden="true" /> : <MessageCircle className="h-4 w-4" aria-hidden="true" />}
+          </button>
+        </div>
+      )}
 
       {/* ---------- مودال قوانین ---------- */}
       {rulesOpen && (

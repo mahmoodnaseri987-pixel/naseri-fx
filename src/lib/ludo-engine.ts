@@ -14,10 +14,10 @@ import {
   LUDO_BOT_MOVE_VAR,
   LUDO_BOT_ROLL_MIN,
   LUDO_BOT_ROLL_VAR,
+  LUDO_AUTO_MOVE_MS,
   LUDO_COLUMN_START,
   LUDO_GAME_SLUG,
   LUDO_HOME_STEP,
-  LUDO_MOVE_MS,
   LUDO_PIECES,
   LUDO_START_ABS,
   LUDO_START_DELAY_MS,
@@ -100,13 +100,14 @@ export function createLudoState(members: { id: string; name: string }[]): LudoRo
 export function parseLudoState(raw: string): LudoRoomState | null {
   try {
     const d = JSON.parse(raw) as LudoRoomState & {
-      dice?: { v?: unknown; a?: unknown; b?: unknown; at?: unknown } | null;
+      dice?: { v?: unknown; a?: unknown; b?: unknown; at?: unknown; auto?: unknown } | null;
     };
     /* مهاجرت از حالت قدیمی دو‌تاس ({a,b}) به یک‌تاس ({v}) — جمع دو تاس */
     if (d.dice !== null && d.dice !== undefined) {
       const at = typeof d.dice.at === "number" ? { at: d.dice.at } : {};
+      const auto = d.dice.auto === true ? { auto: true as const } : {}; // پرتاب خودکار سرور — برای قوس زمان کلاینت
       if (typeof d.dice.v === "number") {
-        d.dice = { v: Math.max(1, Math.min(6, Math.round(d.dice.v))), ...at };
+        d.dice = { v: Math.max(1, Math.min(6, Math.round(d.dice.v))), ...at, ...auto };
       } else if (typeof d.dice.a === "number" && typeof d.dice.b === "number") {
         d.dice = { v: Math.max(2, Math.min(12, d.dice.a + d.dice.b)), ...at };
       } else {
@@ -517,13 +518,13 @@ export function ludoTick(
       continue;
     }
     if (!st.dice) {
-      /* پرتاب تاس خودکار (مهلت انسان تمام شده یا نوبت ربات است) */
+      /* پرتاب تاس خودکار — مهلت انسان تمام شده (غایب/قطعی نت) یا نوبت ربات است */
       st.seq += 1;
-      st.dice = { ...rollDice(), at: st.seq }; // «at» شناسهٔ پایدار این پرتاب برای کلاینت
+      st.dice = { ...rollDice(), at: st.seq, auto: true }; // «at» شناسهٔ پایدار این پرتاب؛ «auto» برای قوس زمان درست کلاینت
       st.rolls += 1;
       st.deadline = isBotId(st.turnId)
         ? now + botDelay(st, LUDO_BOT_MOVE_MIN, LUDO_BOT_MOVE_VAR)
-        : now + LUDO_MOVE_MS;
+        : now + LUDO_AUTO_MOVE_MS; // بازیکن حاضر نیست — حرکت هم زود خودکار می‌شود، نه ۱۴ثانیه دیگر
       mutated = true;
       continue;
     }

@@ -7,7 +7,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, LogIn, Send } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2, LogIn, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useLang } from "@/components/site/language-provider";
 import { MemberAvatar } from "@/components/site/member-avatar";
@@ -22,9 +22,10 @@ type ChatPanelProps = {
   scope: string; // "lobby" یا کد ۵ حرفی اتاق
   className?: string; // کنترل ارتفاع توسط والد
   hideHeader?: boolean; // وقتی والد خودش هدر دارد
+  dock?: boolean; // حالت نوار پایین صفحهٔ بازی (موبایل) — پیام تازهٔ دوخطی + تاریخچهٔ بازشو
 };
 
-export function ChatPanel({ scope, className = "", hideHeader = false }: ChatPanelProps) {
+export function ChatPanel({ scope, className = "", hideHeader = false, dock = false }: ChatPanelProps) {
   const { t, lang } = useLang();
   const c = t.chat;
   const r = t.arena.room;
@@ -40,6 +41,7 @@ export function ChatPanel({ scope, className = "", hideHeader = false }: ChatPan
   const [gone, setGone] = useState(false);
   const [joining, setJoining] = useState("");
   const [status, setStatus] = useState<StreamStatus>("connecting");
+  const [open, setOpen] = useState(false); // فقط حالت داک — بازشدن تاریخچهٔ پیام‌ها
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastIdRef = useRef(0);
@@ -139,13 +141,13 @@ export function ChatPanel({ scope, className = "", hideHeader = false }: ChatPan
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scope, pollOnce, mergeIncoming]);
 
-  /* اسکرول خودکار به آخرین پیام وقتی کاربر پایین است */
+  /* اسکرول خودکار به آخرین پیام وقتی کاربر پایین است — و با بازشدن داک */
   useEffect(() => {
     const el = scrollRef.current;
     if (el && atBottomRef.current) {
       el.scrollTop = el.scrollHeight;
     }
-  }, [msgs]);
+  }, [msgs, open]);
 
   function onScroll() {
     const el = scrollRef.current;
@@ -250,6 +252,212 @@ export function ChatPanel({ scope, className = "", hideHeader = false }: ChatPan
     return t.arena.gameQuiz; // پیش‌فرض و ARENA_GAME_SLUG
   }
 
+  /** یک پیام — هم در فهرست معمولی، هم در تاریخچهٔ داک */
+  function renderMsg(m: ChatMsgView) {
+    if (m.kind === "system") {
+      /* اعلان ساخت اتاق — کارت با دکمه پیوستن */
+      const joinable = m.roomCode ? codes.includes(m.roomCode) : false;
+      return (
+        <div key={m.id}>
+          <div className="mx-auto max-w-[95%] rounded-xl border border-violet-500/30 bg-violet-500/[0.07] px-3.5 py-3 text-center">
+            <p className="text-xs leading-6 text-zinc-300">
+              <b className="text-violet-300">{m.name}</b>{" "}
+              {c.sysCreated.replace("{n}", numFmt(m.roomNumber)).replace("{g}", gameName(m.gameSlug))}{" "}
+              <span dir="ltr" className="font-black tracking-widest text-violet-200">
+                {m.roomCode}
+              </span>
+            </p>
+            {m.roomCode &&
+              (joinable ? (
+                <Button
+                  onClick={() => joinByCode(m.roomCode as string)}
+                  disabled={joining === m.roomCode}
+                  size="sm"
+                  className="mt-2 h-8 rounded-lg bg-violet-500 px-4 text-xs font-bold text-zinc-950 hover:bg-violet-400"
+                >
+                  {joining === m.roomCode ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <LogIn className="h-3.5 w-3.5" aria-hidden="true" />
+                  )}
+                  {c.joinCta}
+                </Button>
+              ) : (
+                <span className="mt-1.5 inline-block text-[10px] font-semibold text-zinc-500">
+                  {c.closedRoom}
+                </span>
+              ))}
+          </div>
+        </div>
+      );
+    }
+
+    const mine = m.memberId === me;
+    return (
+      <div key={m.id}>
+        <div className={`flex gap-2.5 ${mine ? "flex-row-reverse" : ""}`}>
+          <MemberAvatar memberId={m.memberId} name={m.name} size={30} />
+          <div className={`min-w-0 max-w-[85%] ${mine ? "text-end" : ""}`}>
+            <div
+              className={`flex items-baseline gap-2 ${mine ? "flex-row-reverse" : ""}`}
+            >
+              <span className={`truncate text-[11px] font-bold ${mine ? "text-violet-300" : "text-zinc-400"}`}>
+                {mine ? c.you : m.name}
+              </span>
+              <span className="shrink-0 text-[10px] text-zinc-600" suppressHydrationWarning>
+                {timeFmt(m.createdAt)}
+              </span>
+            </div>
+            <p
+              className={`mt-1 inline-block whitespace-pre-wrap break-words rounded-2xl px-3 py-2 text-start text-[13px] leading-6 ${
+                mine
+                  ? "bg-violet-500/15 text-zinc-100 ring-1 ring-violet-500/30"
+                  : "bg-zinc-800/80 text-zinc-200"
+              }`}
+            >
+              {renderContent(m.content)}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /* ---------- حالت داک — نوار چت چسبیده به پایین صفحهٔ بازی (موبایل) ----------
+     پیام تازه بلافاصله و حداکثر دوخطی دیده می‌شود؛ اولویت با نوشتهٔ جدید است
+     و بقیهٔ پیام‌ها با بازکردن داک به‌صورت اسکرول قابل دیدن‌اند. */
+  if (dock) {
+    const latest = msgs && msgs.length > 0 ? msgs[msgs.length - 1] : null;
+    return (
+      <div className={`flex min-h-0 flex-col overflow-hidden ${className}`}>
+        <style>{`
+          @keyframes chatDockPop { 0% { opacity: 0; transform: translateY(7px) } 100% { opacity: 1; transform: translateY(0) } }
+          .chat-dock-pop { animation: chatDockPop .32s ease-out }
+        `}</style>
+
+        {/* تاریخچه — با بازشدن داک؛ اسکرول تا اولین پیام، پایین همیشه تازه‌ترین */}
+        {open && (
+          <div
+            ref={scrollRef}
+            onScroll={onScroll}
+            className="min-h-0 flex-1 space-y-3 overflow-y-auto border-b border-zinc-800/80 px-3 py-3"
+          >
+            {msgs === null ? (
+              <div className="flex justify-center py-6">
+                <Loader2 className="h-4 w-4 animate-spin text-zinc-600" aria-hidden="true" />
+              </div>
+            ) : msgs.length === 0 ? (
+              <p className="px-2 py-4 text-center text-xs leading-6 text-zinc-500">
+                {scope === "lobby" ? c.empty : c.emptyRoom}
+              </p>
+            ) : (
+              msgs.map((m) => renderMsg(m))
+            )}
+          </div>
+        )}
+
+        {/* پیام تازه — همین‌جا، بدون کلیک، حداکثر دو خط */}
+        {!open && (
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            aria-label={c.roomTitle}
+            className="flex w-full items-start gap-2 px-3 pt-2 text-start"
+          >
+            {latest ? (
+              <span key={latest.id} className="chat-dock-pop flex min-w-0 flex-1 items-start gap-2">
+                <MemberAvatar memberId={latest.memberId} name={latest.name} size={26} />
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-baseline gap-2">
+                    <span
+                      className={`truncate text-[10px] font-bold ${
+                        latest.memberId === me
+                          ? "text-violet-300"
+                          : latest.kind === "system"
+                            ? "text-emerald-300"
+                            : "text-zinc-400"
+                      }`}
+                    >
+                      {latest.memberId === me ? c.you : latest.name}
+                    </span>
+                    <span className="shrink-0 text-[9px] text-zinc-600" suppressHydrationWarning>
+                      {timeFmt(latest.createdAt)}
+                    </span>
+                  </span>
+                  <span className="mt-0.5 line-clamp-2 block break-words text-[12px] leading-5 text-zinc-200">
+                    {latest.content}
+                  </span>
+                </span>
+              </span>
+            ) : (
+              <span className="min-w-0 flex-1 pt-1.5 text-[11px] leading-5 text-zinc-500">
+                {scope === "lobby" ? c.empty : c.emptyRoom}
+              </span>
+            )}
+            <ChevronUp className="mt-1.5 h-4 w-4 shrink-0 text-zinc-500" aria-hidden="true" />
+          </button>
+        )}
+
+        {error && (
+          <p className="mx-3 my-1 rounded-lg border border-rose-500/30 bg-rose-500/10 px-2.5 py-1 text-[11px] font-semibold text-rose-300">
+            {error}
+          </p>
+        )}
+
+        {/* ورودی پیام — همیشه در دسترس */}
+        {gone ? (
+          <p className="px-3 py-3 text-center text-[11px] font-semibold text-zinc-500">{c.closedRoom}</p>
+        ) : needAvatar ? (
+          <div className="px-3 py-2">
+            <p className="mb-1.5 text-[11px] font-bold text-amber-300">{c.needAvatar}</p>
+            <AvatarPicker
+              variant="upload"
+              onDone={() => {
+                setNeedAvatar(false);
+                setError("");
+              }}
+            />
+          </div>
+        ) : (
+          <form onSubmit={send} className="flex items-center gap-2 p-2">
+            <button
+              type="button"
+              onClick={() => setOpen((v) => !v)}
+              aria-label={c.roomTitle}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900 text-zinc-400 transition hover:text-zinc-200"
+            >
+              {open ? (
+                <ChevronDown className="h-4 w-4" aria-hidden="true" />
+              ) : (
+                <ChevronUp className="h-4 w-4" aria-hidden="true" />
+              )}
+            </button>
+            <input
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder={c.ph}
+              maxLength={500}
+              className="h-9 min-w-0 flex-1 rounded-xl border border-zinc-700 bg-zinc-900 px-3 text-[13px] text-zinc-100 outline-none transition-colors placeholder:text-zinc-600 focus:border-violet-500/60"
+            />
+            <Button
+              type="submit"
+              disabled={sending || !text.trim()}
+              size="icon"
+              aria-label={c.send}
+              className="h-9 w-9 shrink-0 rounded-xl bg-violet-500 text-zinc-950 hover:bg-violet-400 disabled:opacity-40"
+            >
+              {sending ? (
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <Send className="h-4 w-4 rtl:-scale-x-100" aria-hidden="true" />
+              )}
+            </Button>
+          </form>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className={`flex min-h-0 flex-col overflow-hidden ${className}`}>
       {!hideHeader && (
@@ -288,75 +496,7 @@ export function ChatPanel({ scope, className = "", hideHeader = false }: ChatPan
             {c.hint}
           </p>
         ) : (
-          msgs.map((m) => {
-            if (m.kind === "system") {
-              /* اعلان ساخت اتاق — کارت با دکمه پیوستن */
-              const open = m.roomCode ? codes.includes(m.roomCode) : false;
-              return (
-                <div key={m.id}>
-                  <div className="mx-auto max-w-[95%] rounded-xl border border-violet-500/30 bg-violet-500/[0.07] px-3.5 py-3 text-center">
-                    <p className="text-xs leading-6 text-zinc-300">
-                      <b className="text-violet-300">{m.name}</b>{" "}
-                      {c.sysCreated.replace("{n}", numFmt(m.roomNumber)).replace("{g}", gameName(m.gameSlug))}{" "}
-                      <span dir="ltr" className="font-black tracking-widest text-violet-200">
-                        {m.roomCode}
-                      </span>
-                    </p>
-                    {m.roomCode &&
-                      (open ? (
-                        <Button
-                          onClick={() => joinByCode(m.roomCode as string)}
-                          disabled={joining === m.roomCode}
-                          size="sm"
-                          className="mt-2 h-8 rounded-lg bg-violet-500 px-4 text-xs font-bold text-zinc-950 hover:bg-violet-400"
-                        >
-                          {joining === m.roomCode ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-                          ) : (
-                            <LogIn className="h-3.5 w-3.5" aria-hidden="true" />
-                          )}
-                          {c.joinCta}
-                        </Button>
-                      ) : (
-                        <span className="mt-1.5 inline-block text-[10px] font-semibold text-zinc-500">
-                          {c.closedRoom}
-                        </span>
-                      ))}
-                  </div>
-                </div>
-              );
-            }
-
-            const mine = m.memberId === me;
-            return (
-              <div key={m.id}>
-                <div className={`flex gap-2.5 ${mine ? "flex-row-reverse" : ""}`}>
-                  <MemberAvatar memberId={m.memberId} name={m.name} size={30} />
-                  <div className={`min-w-0 max-w-[85%] ${mine ? "text-end" : ""}`}>
-                    <div
-                      className={`flex items-baseline gap-2 ${mine ? "flex-row-reverse" : ""}`}
-                    >
-                      <span className={`truncate text-[11px] font-bold ${mine ? "text-violet-300" : "text-zinc-400"}`}>
-                        {mine ? c.you : m.name}
-                      </span>
-                      <span className="shrink-0 text-[10px] text-zinc-600" suppressHydrationWarning>
-                        {timeFmt(m.createdAt)}
-                      </span>
-                    </div>
-                    <p
-                      className={`mt-1 inline-block whitespace-pre-wrap break-words rounded-2xl px-3 py-2 text-start text-[13px] leading-6 ${
-                        mine
-                          ? "bg-violet-500/15 text-zinc-100 ring-1 ring-violet-500/30"
-                          : "bg-zinc-800/80 text-zinc-200"
-                      }`}
-                    >
-                      {renderContent(m.content)}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            );
-          })
+          msgs.map((m) => renderMsg(m))
         )}
       </div>
 
