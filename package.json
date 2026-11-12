@@ -3,7 +3,7 @@
   "version": "0.2.1",
   "private": true,
   "scripts": {
-    "prebuild": "node scripts/sher_scan.mjs",
+    "prebuild": "node src/data/sher-scan.mjs",
     "dev": "next dev -p 3000 2>&1 | tee dev.log",
     "build": "export DATABASE_URL=\"${DATABASE_URL:-${DATABASE_URL_POSTGRES_URL_NON_POOLING:-${DATABASE_URL_POSTGRES_URL:-${DATABASE_URL_POSTGRES_PRISMA_URL:-$DATABASE_URL_DATABASE_URL}}}}\" && prisma generate && prisma db push --accept-data-loss --skip-generate && next build",
     "start": "NODE_ENV=production bun .next/standalone/server.js 2>&1 | tee server.log",

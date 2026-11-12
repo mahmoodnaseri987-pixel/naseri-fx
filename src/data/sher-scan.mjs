@@ -5,7 +5,7 @@ import { mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".."); // از src/data به ریشهٔ مخزن
 const songsDir = path.join(repo, "public", "sher", "songs");
 const outFile = path.join(repo, "src", "data", "sher-manifest.json");
 const EXTENSIONS = new Set([".mp3", ".wav", ".m4a", ".ogg", ".flac"]);
