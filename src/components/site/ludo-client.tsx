@@ -23,6 +23,7 @@ import {
   Minimize2,
   Play,
   Trophy,
+  Users,
   Volume2,
   VolumeX,
   X,
@@ -48,6 +49,7 @@ import {
   LUDO_TURN_MS,
   ludoAbsCellOf,
   ludoActionsFor,
+  ludoTeamOf,
   type LudoColor,
   type LudoSurpriseKind,
 } from "@/lib/ludo-shared";
@@ -429,7 +431,7 @@ export function LudoClient({
   const surpriseCells = useMemo(() => l.surprise.map((s) => s.cell), [l.surprise]);
   const legal = useMemo(() => {
     if (!myTurn || !l.dice || myColor === undefined) return [];
-    return ludoActionsFor({ me, colorOf, pieces: l.pieces, dice: l.dice, surprise: surpriseCells });
+    return ludoActionsFor({ me, colorOf, pieces: l.pieces, dice: l.dice, surprise: surpriseCells, teams: l.teams });
   }, [myTurn, l.dice, l.pieces, colorOf, surpriseCells, me, myColor]);
   const movable = useMemo(() => new Set(legal.map((a) => a.piece)), [legal]);
   const hasEnter = legal.some((a) => a.kind === "enter");
@@ -1178,6 +1180,15 @@ export function LudoClient({
                       />
                     )}
                   </div>
+                  {/* بازی تیمی — نشان هم‌تیمی روی پایگاه (هر تیم یک رنگ نشان) */}
+                  {l.teams && (
+                    <span
+                      className="absolute -bottom-1 -end-1 flex h-[38%] w-[38%] items-center justify-center rounded-full border border-zinc-950/60"
+                      style={{ background: ludoTeamOf(p.color) === 0 ? "#f472b6" : "#22d3ee" }}
+                    >
+                      <Users className="h-2 w-2 text-zinc-950" aria-hidden="true" />
+                    </span>
+                  )}
                 </div>
               );
             })}
@@ -1199,6 +1210,20 @@ export function LudoClient({
               <p className="text-5xl font-black text-amber-300">
                 {new Intl.NumberFormat(lang === "fa" ? "fa-IR" : "en-US").format(Math.ceil(countdown / 1000))}
               </p>
+              {/* بازی تیمی — نام هم‌تیمی قبل از شروع */}
+              {l.teams &&
+                (() => {
+                  const meColor = l.players.find((p) => p.id === me)?.color;
+                  const partner =
+                    meColor === undefined
+                      ? undefined
+                      : l.players.find((p) => p.id !== me && ludoTeamOf(p.color) === ludoTeamOf(meColor));
+                  return partner ? (
+                    <p className="text-xs font-bold text-amber-200">
+                      {L.partner}: {partner.name}
+                    </p>
+                  ) : null;
+                })()}
             </div>
           )}
 
@@ -1224,6 +1249,28 @@ export function LudoClient({
                   ? l.players.find((p) => p.id === l.result!.find((r) => r.rank === 1)!.id)?.name
                   : "—"}
               </p>
+              {/* بازی تیمی — بنر برد تیم برنده */}
+              {l.teams &&
+                (() => {
+                  const champ = l.result.find((r) => r.rank === 1);
+                  const champColor = champ ? l.players.find((p) => p.id === champ.id)?.color : undefined;
+                  if (champColor === undefined) return null;
+                  const team = ludoTeamOf(champColor);
+                  const c1 = LUDO_COLOR_INFO[(team === 0 ? 0 : 1) as LudoColor];
+                  const c2 = LUDO_COLOR_INFO[(team === 0 ? 2 : 3) as LudoColor];
+                  return (
+                    <p className="flex flex-wrap items-center justify-center gap-1.5 text-sm font-bold text-amber-200">
+                      {L.teamWin}
+                      <span className="flex items-center gap-1 text-zinc-100">
+                        <span className="h-2.5 w-2.5 rounded-full" style={{ background: c1.base }} />
+                        {lang === "fa" ? c1.fa : c1.en}
+                        <span className="text-amber-200">+</span>
+                        <span className="h-2.5 w-2.5 rounded-full" style={{ background: c2.base }} />
+                        {lang === "fa" ? c2.fa : c2.en}
+                      </span>
+                    </p>
+                  );
+                })()}
               <ul className="w-full max-w-xs space-y-1.5">
                 {l.result.map((row) => {
                   const p = l.players.find((x) => x.id === row.id);
@@ -1398,7 +1445,7 @@ export function LudoClient({
               </button>
             </div>
             <ul className="mt-4 space-y-2.5">
-              {[L.rule1, L.rule2, L.rule3, L.rule4, L.rule5, L.rule6, L.rule7, L.rule8, L.rule9, L.rule10, L.rule11].map(
+              {[L.rule1, L.rule2, L.rule3, L.rule4, L.rule5, L.rule6, L.rule7, L.rule8, L.rule9, L.rule10, L.rule11, L.rule12].map(
                 (rule, i) => (
                   <li key={i} className="flex gap-2.5 text-[13px] leading-6 text-zinc-300">
                     <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-sky-500/15 text-[10px] font-black text-sky-300">

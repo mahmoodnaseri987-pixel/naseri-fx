@@ -18,6 +18,7 @@ import {
   MessageCircle,
   Play,
   Trophy,
+  Users,
   Volume2,
   VolumeX,
   WifiOff,
@@ -55,6 +56,17 @@ export function RoomClient({ code }: { code: string }) {
   const [chatOpen, setChatOpen] = useState(false); // چت شناور وسط مسابقه
   const [fetchedAt, setFetchedAt] = useState(0); // زمان کلاینت آخرین وضعیت
   const [muted, setMuted] = useState(false); // افکت‌های صوتی — بعد از mount از localStorage خوانده می‌شود
+  const [ludoTeams, setLudoTeams] = useState(false); // منچ — انتخاب بازی تیمی ۲به۲ توسط میزبان
+  const seenTeamsRef = useRef(false); // آخرین مقدار دریافتی از سرور — فقط با تغییر واقعی همگام می‌شود
+
+  /* انتخاب تیمی میزبان از سرور (مثلاً بعد از «مسابقه دوباره») — بدون به‌هم‌زدن کلید محلی */
+  useEffect(() => {
+    const srv = st?.room.ludoTeams === true;
+    if (st && srv !== seenTeamsRef.current) {
+      seenTeamsRef.current = srv;
+      setLudoTeams(srv);
+    }
+  }, [st]);
 
   const roundRef = useRef(-1);
   const stingerRef = useRef("");
@@ -391,14 +403,37 @@ export function RoomClient({ code }: { code: string }) {
           </Button>
 
           {iAmHost ? (
-            <Button
-              onClick={() => action({ type: "start" })}
-              disabled={sending || !allReady}
-              className="h-12 w-full max-w-xs rounded-xl bg-violet-500 text-base font-bold text-zinc-950 hover:bg-violet-400 disabled:opacity-40"
-            >
-              <Play className="h-5 w-5" aria-hidden="true" />
-              {r.startCta}
-            </Button>
+            <>
+              {/* بازی تیمی منچ — انتخاب میزبان، فقط با ۴ بازیکن معنا دارد */}
+              {st.room.gameSlug === LUDO_GAME_SLUG && st.room.status === "lobby" && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setLudoTeams((v) => !v)}
+                    disabled={sending || st.members.length !== 4}
+                    className={`flex h-11 w-full max-w-xs items-center justify-center gap-2 rounded-xl border text-sm font-bold transition disabled:opacity-50 ${
+                      ludoTeams
+                        ? "border-amber-400/50 bg-amber-500/15 text-amber-200"
+                        : "border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
+                    }`}
+                  >
+                    <Users className="h-4 w-4" aria-hidden="true" />
+                    {r.teamsCta} — {ludoTeams ? r.teamsOn : r.teamsOff}
+                  </button>
+                  {st.members.length !== 4 && (
+                    <p className="text-center text-[11px] text-zinc-600">{r.teamsNeed4}</p>
+                  )}
+                </>
+              )}
+              <Button
+                onClick={() => action({ type: "start", teams: ludoTeams })}
+                disabled={sending || !allReady}
+                className="h-12 w-full max-w-xs rounded-xl bg-violet-500 text-base font-bold text-zinc-950 hover:bg-violet-400 disabled:opacity-40"
+              >
+                <Play className="h-5 w-5" aria-hidden="true" />
+                {r.startCta}
+              </Button>
+            </>
           ) : (
             <p className="text-xs text-zinc-500">{r.waitingHost}</p>
           )}

@@ -243,6 +243,7 @@ export type ArenaStateResponse = {
     hostId: string;
     maxPlayers: number;
     ageGroup: string; // گروه سنی اتاق — سؤال‌ها متناسب با آن
+    ludoTeams: boolean; // منچ — بازی تیمی ۲به۲ (انتخاب میزبان)
   };
   members: ArenaMemberView[];
   game: ArenaGameView | null;

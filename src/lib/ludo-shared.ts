@@ -5,8 +5,11 @@
    قوانین (مطابق انتخاب مالک سایت — نسخهٔ یک‌تاس):
      • هر بازیکن ۴ مهرهٔ هم‌رنگ دارد؛ همه اول در پایگاه‌اند.
      • در هر نوبت یک تاس پرتاب می‌شود و مهره به همان تعداد حرکت می‌کند.
-     • ورود مهره به مسیر فقط با آوردن ۶ — ورود یعنی نشستن روی
+     • ورود مهره به مسیر با آوردن ۱ یا ۶ — ورود یعنی نشستن روی
        خانهٔ شروعِ رنگ خود بازیکن؛ آوردن ۶ پرتاب دوباره هم می‌دهد.
+     • در مسابقهٔ تیمی (اختیاری میزبان، فقط با ۴ نفر): قرمز+زرد در برابر
+       سبز+آبی؛ روی خانهٔ هم‌تیمی نمی‌شود نشست و او زده نمی‌شود؛ تیمی
+       برنده است که هر دو هم‌تیمی‌اش مهره‌هایشان را به خانه برسانند.
      • فرود روی مهرهٔ حریف (در خانهٔ غیرامن) = زدن؛ مهره به پایگاه برمی‌گردد.
      • خانهٔ شروعِ هر رنگ «خانهٔ امن» است: هیچ مهرهٔ دیگر آن‌جا زده نمی‌شود
        و اگر آن خانه با مهرهٔ صاحبش پر باشد، حرکت حریف به آن انجام نمی‌شود.
@@ -62,6 +65,12 @@ export function ludoColorsFor(count: number): LudoColor[] {
   if (count <= 2) return [0, 2];
   if (count === 3) return [0, 1, 2];
   return [0, 1, 2, 3];
+}
+
+/** تیم یک رنگ در بازی تیمی ۲به۲ — رنگ‌های قطر مقابل هم‌تیمی‌اند:
+    تیم ۰ = قرمز(۰)+زرد(۲) و تیم ۱ = سبز(۱)+آبی(۳) */
+export function ludoTeamOf(color: LudoColor): 0 | 1 {
+  return (color % 2) as 0 | 1;
 }
 
 /* مختصات ۵۲ خانهٔ مسیر اصلی روی شبکهٔ ۱۵×۱۵ — (ستون، ردیف)، از ۰ */
@@ -182,6 +191,7 @@ export type LudoRoomState = {
   surprise: number[]; // ۵ خانهٔ مطلق این مسابقه
   surpriseKind: Record<number, LudoSurpriseKind>; // خانهٔ مطلق → اثر
   deadline: number; // مهلت اکشن جاری (پرتاب یا حرکت) — epoch ms
+  teams?: boolean; // بازی تیمی ۲به۲ (قرمز+زرد مقابل سبز+آبی) — فقط با ۴ بازیکن
   result: LudoResultRow[] | null;
 };
 
@@ -203,14 +213,17 @@ export function ludoActionsFor(args: {
   pieces: Record<string, number[]>;
   dice: LudoDice | null;
   surprise: number[];
+  teams?: boolean; // بازی تیمی — خانهٔ هم‌تیمی مثل خانهٔ خودی بسته است و او زده نمی‌شود
 }): LudoAction[] {
-  const { me, colorOf, pieces, dice, surprise } = args;
+  const { me, colorOf, pieces, dice, surprise, teams } = args;
   const myColor = colorOf[me];
   if (myColor === undefined || !dice) return [];
   const sum = dice.v;
   const mine = pieces[me] ?? [];
   const out: LudoAction[] = [];
   const others = Object.keys(pieces).filter((id) => id !== me);
+  const sameTeam = (color: LudoColor): boolean =>
+    teams === true && color !== myColor && ludoTeamOf(color) === ludoTeamOf(myColor);
 
   const occupancyAt = (abs: number): { own: boolean; ownerBlock: boolean } => {
     let own = false;
@@ -222,7 +235,7 @@ export function ludoActionsFor(args: {
       for (const s of steps) {
         if (s < 0 || s >= LUDO_COLUMN_START) continue;
         if (ludoAbsCellOf(oc, s) !== abs) continue;
-        if (oc === myColor) own = true;
+        if (oc === myColor || sameTeam(oc)) own = true; // خانهٔ خودی یا هم‌تیمی — بسته
         if (owner !== null && oc === owner) ownerBlock = true;
       }
     }
@@ -238,6 +251,7 @@ export function ludoActionsFor(args: {
     let best: { id: string; step: number } | null = null;
     for (const id of others) {
       const oc = colorOf[id];
+      if (sameTeam(oc)) continue; // هم‌تیمی زده نمی‌شود
       for (const s of pieces[id] ?? []) {
         if (s < 0 || s >= LUDO_COLUMN_START) continue;
         if (ludoAbsCellOf(oc, s) !== abs) continue;
@@ -247,8 +261,8 @@ export function ludoActionsFor(args: {
     return best?.id ?? null;
   };
 
-  /* ورود با ۶ — فقط وقتی خانهٔ شروع خودمان با مهرهٔ خودمان پر نشده */
-  if (dice.v === 6) {
+  /* ورود با ۱ یا ۶ — فقط وقتی خانهٔ شروع خودمان با مهرهٔ خودمان یا هم‌تیمی پر نشده */
+  if (dice.v === 6 || dice.v === 1) {
     const hasInBase = mine.some((s) => s < 0);
     if (hasInBase) {
       const abs = LUDO_START_ABS[myColor];
@@ -315,6 +329,7 @@ export type LudoView = {
   players: LudoViewPlayer[];
   pieces: Record<string, number[]>;
   surprise: { cell: number; kind: LudoSurpriseKind }[];
+  teams: boolean;
   finished: boolean;
   result: LudoResultRow[] | null;
 };

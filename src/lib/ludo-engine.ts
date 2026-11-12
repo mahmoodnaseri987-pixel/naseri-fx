@@ -32,6 +32,7 @@ import {
   ludoIsStartCell,
   ludoPiecesHome,
   ludoTotalSteps,
+  ludoTeamOf,
   type LudoAction,
   type LudoColor,
   type LudoRoomState,
@@ -57,7 +58,10 @@ function colorMap(st: LudoRoomState): Record<string, LudoColor> {
 
 /* ---------- ساخت وضعیت شروع ---------- */
 
-export function createLudoState(members: { id: string; name: string }[]): LudoRoomState {
+export function createLudoState(
+  members: { id: string; name: string }[],
+  opts?: { teams?: boolean }, // بازی تیمی ۲به۲ — فقط با ۴ بازیکن معنا دارد
+): LudoRoomState {
   const colors = ludoColorsFor(Math.min(4, members.length));
   const players: Record<string, LudoRoomState["players"][string]> = {};
   const pieces: Record<string, number[]> = {};
@@ -66,6 +70,8 @@ export function createLudoState(members: { id: string; name: string }[]): LudoRo
     pieces[m.id] = Array.from({ length: LUDO_PIECES }, () => -1);
   });
   const order = members.slice(0, 4).map((m) => m.id);
+  /* تیم‌بندی: ترتیب نشستن ۰،۱،۲،۳ = قرمز، سبز، زرد، آبی — هم‌تیمی‌ها قطر مقابل */
+  const teams = opts?.teams === true && order.length === 4;
 
   /* ۵ خانهٔ سورپرایز با جای و اثر تصادفی — برای همهٔ بازیکنان همین مسابقه یکی */
   const cells = shuffle([...LUDO_SURPRISE_POOL]).slice(0, LUDO_SURPRISE_COUNT);
@@ -90,6 +96,7 @@ export function createLudoState(members: { id: string; name: string }[]): LudoRo
     skipNext: {},
     surprise: cells,
     surpriseKind,
+    teams,
     deadline: now + LUDO_START_DELAY_MS,
     result: null,
   };
@@ -144,6 +151,17 @@ export function rollDice(): { v: number } {
   return { v: 1 + Math.floor(Math.random() * 6) };
 }
 
+/** پرچم بازی تیمی از JSON خام state — هم در لابی ({ludoTeams:true}) و
+    هم در حالت مسابقه ({teams:true}) کار می‌کند؛ برای سایر بازی‌ها همیشه false */
+export function ludoTeamsFlagOf(raw: string): boolean {
+  try {
+    const d = JSON.parse(raw) as { ludoTeams?: unknown; teams?: unknown };
+    return d.ludoTeams === true || d.teams === true;
+  } catch {
+    return false;
+  }
+}
+
 /* ---------- رخدادها برای چت سیستمی ---------- */
 
 export type LudoEvent =
@@ -194,6 +212,7 @@ function blockedAt(st: LudoRoomState, playerId: string, abs: number): boolean {
       if (s < 0 || s >= LUDO_HOME_STEP) continue;
       if (ludoAbsCellOf(oc, s) !== abs) continue;
       if (oc === myColor) return true; // خانهٔ مقصد با مهرهٔ خودمان پر است
+      if (st.teams && ludoTeamOf(oc) === ludoTeamOf(myColor)) return true; // خانهٔ هم‌تیمی — مثل خانهٔ خودی بسته است
       if (owner !== null && oc === owner) return true; // خانهٔ شروعِ صاحب‌دار
     }
   }
@@ -211,6 +230,7 @@ function captureAtCell(st: LudoRoomState, playerId: string, abs: number): string
     if (id === playerId) continue;
     const oc = st.players[id]?.color;
     if (oc === undefined) continue;
+    if (st.teams && ludoTeamOf(oc) === ludoTeamOf(myColor)) continue; // هم‌تیمی هرگز زده نمی‌شود
     for (const s of steps) {
       if (s < 0 || s >= LUDO_HOME_STEP) continue;
       if (ludoAbsCellOf(oc, s) !== abs) continue;
@@ -273,9 +293,8 @@ function advanceTurn(st: LudoRoomState, now: number): void {
   st.deadline = botDeadline(st, now);
 }
 
-/** نتیجهٔ نهایی — وقتی هیچ بازیکن در-جریانی نمانده باشد (همه رسیده‌اند یا رفته‌اند) */
-export function maybeFinish(st: LudoRoomState, now: number): boolean {
-  if (st.result || st.order.length > 0) return false;
+/** ردیف‌های نتیجه — رسیده‌ها به ترتیب زمان، بقیه با پیشرفت */
+function buildResultRows(st: LudoRoomState): LudoRoomState["result"] {
   const rows = Object.keys(st.players).map((id) => {
     const steps = st.pieces[id] ?? [];
     return {
@@ -291,10 +310,36 @@ export function maybeFinish(st: LudoRoomState, now: number): boolean {
     if (b.finishedAt) return 1;
     return b.home * 1000 + b.steps - (a.home * 1000 + a.steps);
   });
-  st.result = rows.map((r) => ({ id: r.id, rank: 0, home: r.home, steps: r.steps }));
-  st.result.forEach((r, i) => {
+  const result = rows.map((r) => ({ id: r.id, rank: 0, home: r.home, steps: r.steps }));
+  result.forEach((r, i) => {
     r.rank = i + 1;
   });
+  return result;
+}
+
+/** پایان تیمی — در بازی تیمی، تیمی که هر دو هم‌تیمی‌اش رسیده باشند برنده است
+    و مسابقه همان‌جا تمام می‌شود (حتی اگر تیم دیگر هنوز در جریان باشد) */
+function maybeTeamFinish(st: LudoRoomState, now: number): boolean {
+  if (!st.teams || st.result) return false;
+  const teamIds: Record<0 | 1, string[]> = { 0: [], 1: [] };
+  for (const [id, p] of Object.entries(st.players)) {
+    teamIds[ludoTeamOf(p.color)].push(id);
+  }
+  for (const team of [0, 1] as const) {
+    const ids = teamIds[team];
+    if (ids.length === 2 && ids.every((id) => st.finishedAt[id])) {
+      st.result = buildResultRows(st);
+      st.deadline = now;
+      return true;
+    }
+  }
+  return false;
+}
+
+/** نتیجهٔ نهایی — وقتی هیچ بازیکن در-جریانی نمانده باشد (همه رسیده‌اند یا رفته‌اند) */
+export function maybeFinish(st: LudoRoomState, now: number): boolean {
+  if (st.result || st.order.length > 0) return false;
+  st.result = buildResultRows(st);
   st.deadline = now;
   return true;
 }
@@ -387,7 +432,7 @@ function applyAction(
     advanceTurn(st, now);
   }
 
-  const settled = maybeFinish(st, now);
+  const settled = maybeTeamFinish(st, now) || maybeFinish(st, now);
   return { ok: true, captured, surprise, extraRoll, finishedPlayer, settled, events };
 }
 
@@ -415,6 +460,7 @@ export function ludoApplyPlayerAction(
     pieces: st.pieces,
     dice: st.dice,
     surprise: st.surprise,
+    teams: st.teams === true,
   });
   const action = legal.find((a) => a.piece === piece);
   if (!action) return deniedOutcome("illegal");
@@ -432,6 +478,7 @@ export function ludoApplyPass(st: LudoRoomState, playerId: string, now: number):
     pieces: st.pieces,
     dice: st.dice,
     surprise: st.surprise,
+    teams: st.teams === true,
   });
   if (legal.length > 0) return deniedOutcome("illegal");
   advanceTurn(st, now);
@@ -451,13 +498,14 @@ export function ludoBestAction(st: LudoRoomState, playerId: string): LudoAction 
     pieces: st.pieces,
     dice: st.dice,
     surprise: st.surprise,
+    teams: st.teams === true,
   });
   if (legal.length === 0) return null;
   const steps = st.pieces[playerId] ?? [];
   let best: { action: LudoAction; score: number } | null = null;
   for (const a of legal) {
     let score = a.newStep;
-    if (a.kind === "enter") score = 70; // ورود با ۶ تقریباً همیشه بهترین است
+    if (a.kind === "enter") score = 70; // ورود با ۱ یا ۶ تقریباً همیشه بهترین است
     if (a.captureOf) score = 200; // زدن مهرهٔ حریف اولویت اول
     if (a.newStep === LUDO_HOME_STEP) score = Math.max(score, 150); // رساندن مهره به خانه
     if (a.abs !== null && st.surprise.includes(a.abs)) {
@@ -575,6 +623,7 @@ export function buildLudoView(
     players,
     pieces: st.pieces,
     surprise: st.surprise.map((cell) => ({ cell, kind: st.surpriseKind[cell] })),
+    teams: st.teams === true,
     finished: Boolean(st.result),
     result: st.result,
   };

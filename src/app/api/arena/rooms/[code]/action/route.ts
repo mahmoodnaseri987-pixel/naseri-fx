@@ -57,6 +57,7 @@ import {
   ludoApplyPass,
   ludoApplyPlayerAction,
   ludoEventTexts,
+  ludoTeamsFlagOf,
   ludoTick,
   ludoTurnDeadline,
   maybeFinish,
@@ -773,7 +774,10 @@ export async function POST(
       }
       const lState = createLudoState(
         room.members.map((m) => ({ id: m.memberId, name: m.name })),
+        // میزبان بازی تیمی را در لابی انتخاب می‌کند؛ «مسابقه دوباره» انتخاب قبلی را حفظ می‌کند
+        { teams: body.teams === true || ludoTeamsFlagOf(room.state) },
       );
+      const wantTeams = lState.teams === true;
       await db.$transaction([
         db.room.update({
           where: { id: room.id },
@@ -788,7 +792,9 @@ export async function POST(
             scope: room.code,
             memberId: me.memberId,
             name: me.name,
-            content: "مسابقهٔ منچ شروع شد — ورود مهره‌ها فقط با آوردن ۶؛ خانه‌های رنگی شروع امن هستند!",
+            content: wantTeams
+              ? "مسابقهٔ تیمی منچ شروع شد — قرمز+زرد در برابر سبز+آبی! ورود مهره‌ها با ۱ یا ۶؛ خانه‌های رنگی شروع امن هستند."
+              : "مسابقهٔ منچ شروع شد — ورود مهره‌ها با ۱ یا ۶؛ خانه‌های رنگی شروع امن هستند!",
             kind: "system",
           },
         }),
@@ -1123,11 +1129,15 @@ export async function POST(
     await db.$transaction([
       db.room.update({
         where: { id: room.id },
-        /* گروه سنی اتاق حفظ می‌شود تا «بازی دوباره» با همان سؤال‌های سنی برگزار شود */
+        /* گروه سنی اتاق حفظ می‌شود تا «بازی دوباره» با همان سؤال‌های سنی برگزار شود
+           و انتخاب بازی تیمی منچ هم برای مسابقهٔ بعدی می‌ماند */
         data: {
           status: "lobby",
           ageGroup: roomAgeGroup(room), // گروه سنی انتخابی میزبان در «مسابقه دوباره» هم می‌ماند
-          state: JSON.stringify({ ageGroup: roomAgeGroup(room) }),
+          state: JSON.stringify({
+            ageGroup: roomAgeGroup(room),
+            ludoTeams: parseLudoState(room.state)?.teams === true,
+          }),
         },
       }),
       db.roomMember.updateMany({ where: { roomId: room.id }, data: { score: 0, isReady: false, fireInput: "{}" } }),

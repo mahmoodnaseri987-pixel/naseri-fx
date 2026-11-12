@@ -26,6 +26,7 @@ import { LUDO_GAME_SLUG, type LudoRoomState } from "@/lib/ludo-shared";
 import {
   buildLudoView,
   ludoEventTexts,
+  ludoTeamsFlagOf,
   ludoTick,
   parseLudoState,
 } from "@/lib/ludo-engine";
@@ -253,6 +254,7 @@ export type RoomSnapshot = {
     hostId: string;
     maxPlayers: number;
     ageGroup: string; // گروه سنی اتاق — نمایش و انتخاب سؤال‌ها
+    ludoTeams: boolean; // منچ — بازی تیمی ۲به۲ انتخاب میزبان
   };
   members: SnapMember[];
   answeredRound: number; // شماره سؤالی که answered به آن تعلق دارد
@@ -649,6 +651,7 @@ async function buildSnapshot(code: string): Promise<RoomSnapshot | null> {
       hostId,
       maxPlayers: room.maxPlayers,
       ageGroup: room.ageGroup,
+      ludoTeams: ludoTeamsFlagOf(room.state),
     },
     members,
     answeredRound,
@@ -821,6 +824,7 @@ export function viewFromSnapshot(
       hostId: room.hostId,
       maxPlayers: room.maxPlayers,
       ageGroup: room.ageGroup,
+      ludoTeams: ludoTeamsFlagOf(room.state) || (ludo?.teams ?? false),
     },
     members,
     game,
