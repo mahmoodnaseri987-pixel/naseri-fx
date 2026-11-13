@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, ReactNode, useSyncExternalStore } from "react";
 import { dict, Lang } from "@/lib/i18n";
+import { MemberHeartbeat } from "@/components/site/member-heartbeat";
 
 type LangContextType = {
   lang: Lang;
@@ -67,6 +68,8 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   return (
     <LangContext.Provider value={{ lang, t: dict[lang] as (typeof dict)["fa"], toggleLang }}>
       {children}
+      {/* تپش قلب سراسری — بدون آن lastSeenAt تازه نمی‌شد و «نفر آنلاین» صفر می‌ماند */}
+      <MemberHeartbeat />
     </LangContext.Provider>
   );
 }
