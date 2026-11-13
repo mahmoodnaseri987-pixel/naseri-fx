@@ -5,7 +5,8 @@ import { db } from "@/lib/db";
 import { ensureSetup } from "@/lib/public-data";
 import { memberGuard } from "@/lib/member-auth";
 import type { Prisma } from "@prisma/client";
-import { BOT_GAMES, BOT_NAMES, BOT_PREFIX, MIN_PLAYERS, computePhase, normalizeAgeGroup, pickQuestions, scoreFor } from "@/lib/arena-game";
+import { BOT_GAMES, BOT_NAMES, BOT_PREFIX, MIN_PLAYERS, ROUND_COUNT, computePhase, normalizeAgeGroup, scoreFor } from "@/lib/arena-game";
+import { pickQuestionsSmart } from "@/lib/arena-bank";
 import {
   MAX_BOOSTS,
   NABARD_GAME_SLUG,
@@ -1178,7 +1179,7 @@ export async function POST(
     }
     /* گروه سنی اتاق از زمان ساخت اتاق حفظ شده است — سؤال‌ها متناسب با آن انتخاب می‌شوند */
     const ageGroup = roomAgeGroup(room);
-    const state = { startedAtMs: Date.now() + 3000, qs: pickQuestions(10, ageGroup) }; // ۳ ثانیه شمارش معکوس
+    const state = { startedAtMs: Date.now() + 3000, qs: await pickQuestionsSmart(ROUND_COUNT, ageGroup) }; // ۳ ثانیه شمارش معکوس
     await db.$transaction([
       db.room.update({
         where: { id: room.id },

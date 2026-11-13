@@ -267,3 +267,18 @@ model SherUploadChunk {
   createdAt DateTime @default(now())
   @@unique([uploadId, idx])
 }
+
+// بانک سؤال «چالش سرعتی» — سؤال‌های ۴گزینه‌ای که مدیر در پنل مدیریت می‌کند
+model QuizQuestion {
+  id        String   @id @default(cuid())
+  category  String // math|general|science|geo|history|sport|cinema|literature|music|tech
+  age       String   @default("adult") // kid|adult|pro
+  text      String
+  options   Json // آرایهٔ ۴ گزینه
+  correct   Int // اندیس گزینهٔ درست ۰..۳
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@index([category, active])
+  @@index([age, active])
+}

@@ -3,6 +3,7 @@
 /* تعریف بخش‌های پنل مدیریت — مشترک بین فهرست ناوبری و صفحه اصلی پنل */
 
 import {
+  BookOpenCheck,
   Boxes,
   Clapperboard,
   FileImage,
@@ -25,6 +26,7 @@ export type SectionId =
   | "apps"
   | "games"
   | "arena"
+  | "quiz"
   | "chat"
   | "members"
   | "resets"
@@ -45,6 +47,7 @@ export const ADMIN_SECTIONS: {
   { id: "apps", label: "اپلیکیشن‌ها", icon: Smartphone },
   { id: "games", label: "بازی‌ها", icon: Gamepad2 },
   { id: "arena", label: "آرنا و اتاق‌ها", icon: Swords },
+  { id: "quiz", label: "بانک سؤال", icon: BookOpenCheck },
   { id: "chat", label: "پاک‌سازی چت‌ها", icon: MessagesSquare },
   { id: "members", label: "اعضای سایت", icon: Users },
   { id: "resets", label: "بازیابی رمز اعضا", icon: MailQuestion },

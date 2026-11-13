@@ -10,6 +10,7 @@ import { LoginForm } from "@/components/site/admin/login-form";
 import { AppsManager } from "@/components/site/admin/apps-manager";
 import { GamesManager } from "@/components/site/admin/games-manager";
 import { MembersManager } from "@/components/site/admin/members-manager";
+import { QuizBankManager } from "@/components/site/admin/quiz-bank-manager";
 import { ArenaManager } from "@/components/site/admin/arena-manager";
 import { ChatCleanupManager } from "@/components/site/admin/chat-cleanup-manager";
 import { GuardManager } from "@/components/site/admin/guard-manager";
@@ -189,6 +190,7 @@ export default function AdminPage() {
             {section === "apps" && <AppsManager />}
             {section === "games" && <GamesManager />}
             {section === "arena" && <ArenaManager />}
+            {section === "quiz" && <QuizBankManager />}
             {section === "chat" && <ChatCleanupManager />}
             {section === "members" && <MembersManager />}
             {section === "resets" && <PasswordResetsManager />}

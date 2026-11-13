@@ -1,11 +1,12 @@
 /* بازی گروهی «چالش سرعتی» — مغز بازی سمت سرور.
    منطق کاملاً قطعی و زمان‌محور است: از startedAtMs اتاق، فاز فعلی بازی
    (سؤال/پاسخ یا نمایش نتیجه) بدون هیچ درخواست اضافه‌ای محاسبه می‌شود.
-   بانک سؤال: ۲۵۲ سؤال یکتا در ۱۰ دسته؛ هر مسابقه از همه دسته‌ها سؤال می‌گیرد. */
+   بانک سؤال: ۲۵۲ سؤال یکتا در ۱۰ دسته به‌علاوهٔ «بانک سؤال» دیتابیسی پنل مدیریت
+   (اطلاعات عمومی)؛ هر مسابقه از همه دسته‌ها سؤال می‌گیرد. */
 
 export const ARENA_GAME_SLUG = "speed-challenge";
 
-export const ROUND_COUNT = 10; // تعداد سؤال هر مسابقه
+export const ROUND_COUNT = 20; // تعداد سؤال هر مسابقه
 export const ANSWER_MS = 10_000; // مدت زمان پاسخ‌دادن به هر سؤال
 export const REVEAL_MS = 4_000; // مدت نمایش پاسخ درست بین سؤال‌ها
 export const PERIOD_MS = ANSWER_MS + REVEAL_MS;
@@ -496,6 +497,13 @@ export function pickQuestions(count: number = ROUND_COUNT, age: AgeGroup = "adul
       : age === "pro"
         ? [...PRO_QUESTIONS, ...QUESTION_POOL.filter(isHardQuestion)]
         : QUESTION_POOL;
+  return pickFromPool(pool, count);
+}
+
+/* انتخاب درهم و بدون تکرار از یک بانک دلخواه — با پوشش همه دسته‌ها:
+   هر دسته درهم می‌شود و سؤال‌ها به‌صورت رفت‌وبرگشتی از دسته‌های مختلف
+   برمی‌خورند. بانک دیتابیسی «بانک سؤال» پنل مدیریت هم از همین مسیر می‌خواند. */
+export function pickFromPool(pool: ArenaQuestion[], count: number): ArenaQuestion[] {
   const byCat = new Map<ArenaCategory, ArenaQuestion[]>();
   for (const q of pool) {
     const arr = byCat.get(q.c) ?? [];
