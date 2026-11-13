@@ -68,8 +68,10 @@ import {
   SHER_GAME_SLUG,
   SHER_MODES,
   parseSherState,
+  sherLobbyCategory,
   sherLobbyMode,
   sherModesFor,
+  type SherCategory,
   type SherMode,
 } from "@/lib/sher-shared";
 import {
@@ -974,10 +976,18 @@ export async function POST(
       if (!room.members.every((m) => m.isReady)) {
         return NextResponse.json({ error: "not ready" }, { status: 409 });
       }
-      /* آهنگ‌های فعال در لحظهٔ شروع — بدون تکرار در همان مسابقه */
-      const pool = createSherSongsPool(
-        await db.sherSong.findMany({ where: { active: true } }),
-      );
+      /* آهنگ‌های فعال در لحظهٔ شروع — بدون تکرار در همان مسابقه.
+         بخش انتخابی میزبان در لابی از همان JSON لابی اتاق می‌آید (الگوی sherMode):
+         اگر بخش معتبر است و در دیتابیس دسته‌بندی وجود دارد، استخر فقط از همان بخش
+         ساخته می‌شود؛ اتاق قدیمی بدون بخش یا دیتابیسِ بدون هیچ دسته‌بندی (ردیف‌های
+         category="" قدیمی) → همهٔ آهنگ‌های فعال (سازگار با قبل). بخش خالی → 409. */
+      const lobbyCategory = sherLobbyCategory(room.state);
+      const allRows = await db.sherSong.findMany({ where: { active: true } });
+      const poolRows =
+        lobbyCategory && allRows.some((r) => r.category !== "")
+          ? allRows.filter((r) => r.category === lobbyCategory)
+          : allRows;
+      const pool = createSherSongsPool(poolRows);
       if (pool.length === 0) {
         return NextResponse.json({ error: "sher-no-songs" }, { status: 409 });
       }
@@ -1001,6 +1011,9 @@ export async function POST(
       if (!sState) {
         return NextResponse.json({ error: "sher-no-songs" }, { status: 409 });
       }
+      /* بخش اتاق در state مسابقه هم ثبت می‌شود تا «مسابقه دوباره» آن را حفظ کند —
+         امضای createSherState دست‌نخورده می‌ماند (فیلتر استخر همین‌جاست) */
+      if (lobbyCategory) sState.category = lobbyCategory;
       await db.$transaction([
         db.room.update({
           where: { id: room.id },
@@ -1243,15 +1256,19 @@ export async function POST(
     if (room.hostId !== me.memberId) {
       return NextResponse.json({ error: "not host" }, { status: 403 });
     }
-    /* «شعر یادت نره»: مود انتخابی میزبان حفظ می‌شود تا مسابقهٔ دوباره با
-       همان مود برگزار شود — اول از state لابی، وگرنه از مود مسابقهٔ گذشته */
+    /* «شعر یادت نره»: مود و بخش انتخابی میزبان حفظ می‌شود تا مسابقهٔ دوباره با
+       همان مود و همان بخش برگزار شود — اول از state لابی، وگرنه از مسابقهٔ گذشته */
     const lobbyState = (() => {
       if (room.gameSlug === SHER_GAME_SLUG) {
-        const sherMode =
-          sherLobbyMode(room.state) ?? parseSherState(room.state)?.mode ?? null;
-        return JSON.stringify(
-          sherMode ? { ageGroup: roomAgeGroup(room), sherMode } : { ageGroup: roomAgeGroup(room) },
-        );
+        const past = parseSherState(room.state);
+        const sherMode = sherLobbyMode(room.state) ?? past?.mode ?? null;
+        const sherCategory = sherLobbyCategory(room.state) ?? past?.category ?? null;
+        const meta: { ageGroup: string; sherMode?: SherMode; sherCategory?: SherCategory } = {
+          ageGroup: roomAgeGroup(room),
+        };
+        if (sherMode) meta.sherMode = sherMode;
+        if (sherCategory) meta.sherCategory = sherCategory;
+        return JSON.stringify(meta);
       }
       /* منچ: بازی تیمی و گروه سنی برای مسابقهٔ بعدی هم می‌ماند */
       return JSON.stringify({

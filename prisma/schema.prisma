@@ -250,6 +250,7 @@ model SherSong {
   artist       String   @default("")
   clipStart    Float    @default(0) // ثانیهٔ شروع کلیپ ۲۰ثانیه‌ای
   answerLine   String   @default("") // مصرع/بیت بعدی که باید حدس زده شود
+  category     String   @default("") // بخش آهنگ: nostalgia|rap|traditional|modern — خالی یعنی هنوز دسته‌بندی نشده
   contextLines String   @default("[]") // JSON: ۱ تا ۳ مصرعِ قبل — زیرنویس حین پخش
   extraLines   String   @default("[]") // JSON: مصرع‌های دیگر همین آهنگ — خوراک گزینهٔ انحرافی
   active       Boolean  @default(false) // فقط آماده‌ها (عنوان+جواب) وارد بازی می‌شوند

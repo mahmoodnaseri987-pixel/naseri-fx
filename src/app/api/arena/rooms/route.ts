@@ -12,7 +12,7 @@ import { NABARD_GAME_SLUG } from "@/lib/nabard-engine";
 import { JADVAL_GAME_SLUG } from "@/lib/jadval-shared";
 import { PIC_GAME_SLUG } from "@/lib/pic-shared";
 import { LUDO_GAME_SLUG } from "@/lib/ludo-shared";
-import { SHER_GAME_SLUG } from "@/lib/sher-shared";
+import { SHER_GAME_SLUG, isSherCategory } from "@/lib/sher-shared";
 import { getArenaGameDef } from "@/lib/arena-registry";
 import { housekeeping } from "@/lib/arena-server";
 import { getArenaCatalog, isRoomGameEnabled } from "@/lib/arena-catalog";
@@ -97,6 +97,16 @@ export async function POST(req: NextRequest) {
     .update({ where: { id: guard.member.id }, data: { ageGroup } })
     .catch(() => undefined);
 
+  /* بخش آهنگ‌های «شعر یادت نره» — فقط برای sher اعتبارسنجی و در JSON لابی
+     ذخیره می‌شود (همان الگوی sherMode)؛ نامعتبر/نیامده → پیش‌فرض nostalgia.
+     استخر آهنگ‌ها هنگام شروع مسابقه از همین بخش ساخته می‌شود. */
+  const isSherRoom = gameSlug === SHER_GAME_SLUG;
+  const sherCategory = isSherRoom
+    ? isSherCategory(body.sherCategory)
+      ? body.sherCategory
+      : "nostalgia"
+    : "";
+
   /* بازی ممکن است موقتاً توسط مدیر از آرنا حذف/غیرفعال شده باشد */
   if (!(await isRoomGameEnabled(gameSlug))) {
     return NextResponse.json({ error: "game-disabled" }, { status: 403 });
@@ -138,7 +148,10 @@ export async function POST(req: NextRequest) {
           status: "lobby",
           maxPlayers,
           ageGroup, // گروه سنی اتاق روی خود اتاق — تا «مسابقه دوباره» حفظ می‌شود
-          state: JSON.stringify({ ageGroup }), // گروه سنی اتاق تا لحظهٔ شروع حفظ می‌شود
+          // JSON لابی: گروه سنی + برای sher بخش آهنگ‌ها تا لحظهٔ شروع حفظ شود
+          state: JSON.stringify(
+            isSherRoom ? { ageGroup, sherCategory } : { ageGroup },
+          ),
         },
       });
       await db.roomMember.create({

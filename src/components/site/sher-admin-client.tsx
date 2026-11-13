@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { SherTrimDialog } from "@/components/site/sher-trim-dialog";
 import { SherLoginForm } from "@/components/site/sher-login-form";
+import { SHER_CATEGORIES, SHER_CATEGORY_SONGS_MAX, type SherCategory } from "@/lib/sher-shared";
 
 type SongStatus = "ready" | "draft" | "stale";
 
@@ -28,8 +29,20 @@ type SherSongRow = {
   contextLines: string[];
   extraLines: string[];
   active: boolean;
+  category: string; // بخش آهنگ — خالی یعنی هنوز دسته‌بندی نشده
   status: SongStatus;
 };
+
+/* برچسب کوتاه بخش‌ها — پنل ادمین فارسی است */
+const CAT_LABELS: Record<SherCategory, string> = {
+  nostalgia: "نوستالژی",
+  rap: "رپ",
+  traditional: "سنتی",
+  modern: "جدید",
+};
+
+/* تب‌های فیلتر فهرست — همه، چهار بخش و بدون بخش */
+type CatFilter = "all" | SherCategory | "none";
 
 const STATUS: Record<SongStatus, { label: string; cls: string }> = {
   ready: { label: "آماده", cls: "border-emerald-500/40 bg-emerald-500/10 text-emerald-300" },
@@ -48,6 +61,11 @@ class SherAuthError extends Error {}
 /* عدد با یک اعشار برای پیام‌ها و برچسب‌ها */
 function fmt1(n: number): string {
   return (Math.round(n * 10) / 10).toFixed(1);
+}
+
+/* عدد با ارقام فارسی برای شمارش‌ها */
+function faDigits(n: number): string {
+  return new Intl.NumberFormat("fa-IR").format(n);
 }
 
 function formatSize(n: number): string {
@@ -85,6 +103,7 @@ type Draft = {
   contextLines: [string, string, string];
   extraText: string;
   active: boolean;
+  category: string;
 };
 
 function draftFrom(row: SherSongRow): Draft {
@@ -96,6 +115,7 @@ function draftFrom(row: SherSongRow): Draft {
     contextLines: [0, 1, 2].map((i) => row.contextLines[i] ?? "") as Draft["contextLines"],
     extraText: row.extraLines.join("\n"),
     active: row.active,
+    category: row.category ?? "",
   };
 }
 
@@ -171,6 +191,7 @@ function SongCard({
         .map((s) => s.trim())
         .filter(Boolean),
       active: d.active,
+      category: d.category,
     };
     try {
       const res = await fetch("/api/sher/admin/songs/upsert", {
@@ -363,7 +384,7 @@ function SongCard({
             </Button>
           </div>
 
-          {/* عنوان و خواننده */}
+          {/* عنوان، خواننده و بخش */}
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label className="text-xs text-zinc-400">عنوان آهنگ</Label>
@@ -382,6 +403,21 @@ function SongCard({
                 placeholder="نام خواننده یا گروه"
                 className={field}
               />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-zinc-400">بخش آهنگ</Label>
+              <select
+                value={draft.category}
+                onChange={(e) => setDraft((d) => ({ ...d, category: e.target.value }))}
+                className={`${field} w-full`}
+              >
+                <option value="">بدون بخش</option>
+                {SHER_CATEGORIES.map((c) => (
+                  <option key={c} value={c}>
+                    {CAT_LABELS[c]}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 
@@ -524,6 +560,19 @@ export function SherAdminClient() {
   const [progress, setProgress] = useState("");
   const [uploadMsg, setUploadMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
+  const [uploadCategory, setUploadCategory] = useState<SherCategory>("nostalgia"); // بخش مقصد آپلود
+  const [catFilter, setCatFilter] = useState<CatFilter>("all"); // تب فیلتر فهرست
+
+  /* شمارش بخش‌ها — فقط ردیف‌های فایل‌دار (همان مبنای گیت سقف ۲۰ در سرور) */
+  const fileRows = rows.filter((r) => r.exists);
+  const catCount = (c: string) => fileRows.filter((r) => r.category === c).length;
+  const uploadFull = catCount(uploadCategory) >= SHER_CATEGORY_SONGS_MAX;
+
+  /* فهرست فیلترشده با تب فعال — همه | چهار بخش | بدون بخش */
+  const visibleRows =
+    catFilter === "all"
+      ? rows
+      : rows.filter((r) => (catFilter === "none" ? r.category === "" : r.category === catFilter));
 
   const load = useCallback(async (soft = false) => {
     if (soft) setRefreshing(true);
@@ -576,6 +625,7 @@ export function SherAdminClient() {
     total: number,
     index: number,
     data: string,
+    category: string,
   ): Promise<void> {
     let lastErr = "";
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -583,7 +633,7 @@ export function SherAdminClient() {
         const res = await fetch("/api/sher/admin/upload", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ uploadId, filename, total, index, data }),
+          body: JSON.stringify({ uploadId, filename, total, index, data, category }),
         });
         if (res.status === 401) {
           setNeedsLogin(true); // نشست بخش شعر منقضی شده — آپلود نیمه‌کاره رها می‌شود
@@ -601,7 +651,12 @@ export function SherAdminClient() {
     throw new Error(lastErr || "آپلود تکه ناموفق بود.");
   }
 
-  async function uploadOneFile(file: File, fileNo: number, fileCount: number): Promise<void> {
+  async function uploadOneFile(
+    file: File,
+    fileNo: number,
+    fileCount: number,
+    category: string,
+  ): Promise<void> {
     const uploadId = crypto.randomUUID();
     const buf = await file.arrayBuffer();
     if (buf.byteLength === 0) throw new Error(`فایل «${file.name}» خالی است.`);
@@ -613,18 +668,25 @@ export function SherAdminClient() {
         `فایل ${fileNo} از ${fileCount} — «${file.name}» — تکه ${i + 1} از ${total}`,
       );
       const slice = buf.slice(i * CHUNK_BYTES, Math.min((i + 1) * CHUNK_BYTES, buf.byteLength));
-      await postChunk(uploadId, file.name, total, i, bufferToBase64(slice));
+      await postChunk(uploadId, file.name, total, i, bufferToBase64(slice), category);
     }
   }
 
   async function startUpload() {
     if (uploading || picked.length === 0) return;
+    if (uploadFull) {
+      setUploadMsg({
+        ok: false,
+        text: `بخش ${CAT_LABELS[uploadCategory]} پر است (${faDigits(SHER_CATEGORY_SONGS_MAX)} آهنگ)`,
+      });
+      return;
+    }
     setUploading(true);
     setUploadMsg(null);
     const count = picked.length;
     try {
       for (let f = 0; f < count; f++) {
-        await uploadOneFile(picked[f], f + 1, count);
+        await uploadOneFile(picked[f], f + 1, count, uploadCategory);
       }
       setUploadMsg({
         ok: true,
@@ -718,22 +780,49 @@ export function SherAdminClient() {
 
         {/* باکس آپلود */}
         <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
-          <div className="flex flex-wrap items-center gap-3">
+          {/* بخش مقصد آپلود — سقف ۲۰ آهنگ در هر بخش */}
+          <div className="flex flex-wrap items-center gap-2.5">
+            <Label className="text-xs text-zinc-400">بخش</Label>
+            <select
+              value={uploadCategory}
+              onChange={(e) => {
+                setUploadCategory(e.target.value as SherCategory);
+                setUploadMsg(null);
+              }}
+              disabled={uploading}
+              className={`${field} w-36`}
+            >
+              {SHER_CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {CAT_LABELS[c]}
+                </option>
+              ))}
+            </select>
+            <span className="text-[11px] text-zinc-500" dir="rtl">
+              {faDigits(catCount(uploadCategory))}/{faDigits(SHER_CATEGORY_SONGS_MAX)} — هر بخش سقف ۲۰ آهنگ دارد
+            </span>
+          </div>
+          {uploadFull && (
+            <p className="mt-2 text-xs font-bold text-rose-300">
+              بخش {CAT_LABELS[uploadCategory]} پر است ({faDigits(SHER_CATEGORY_SONGS_MAX)} آهنگ)
+            </p>
+          )}
+          <div className="mt-3 flex flex-wrap items-center gap-3">
             <input
               ref={fileInputRef}
               type="file"
               multiple
               accept=".mp3,.wav,.m4a,.ogg,.flac"
               onChange={onPick}
-              disabled={uploading}
-              className="h-10 max-w-full text-sm text-zinc-300 file:me-3 file:h-9 file:rounded-xl file:border-0 file:bg-zinc-800 file:px-3 file:text-xs file:text-zinc-200 hover:file:bg-zinc-700"
+              disabled={uploading || uploadFull}
+              className="h-10 max-w-full text-sm text-zinc-300 file:me-3 file:h-9 file:rounded-xl file:border-0 file:bg-zinc-800 file:px-3 file:text-xs file:text-zinc-200 hover:file:bg-zinc-700 disabled:opacity-50"
               dir="ltr"
             />
             <Button
               type="button"
               size="sm"
               onClick={startUpload}
-              disabled={uploading || picked.length === 0}
+              disabled={uploading || picked.length === 0 || uploadFull}
               className="h-9 rounded-xl bg-emerald-600 text-xs text-white hover:bg-emerald-500"
             >
               {uploading ? (
@@ -743,7 +832,7 @@ export function SherAdminClient() {
               )}
               آپلود
             </Button>
-            {picked.length > 0 && !uploading && (
+            {picked.length > 0 && !uploading && !uploadFull && (
               <span className="text-xs text-zinc-500">
                 {picked.length} فایل انتخاب شد — هر فایل حداکثر ۱۵ مگابایت
               </span>
@@ -773,15 +862,60 @@ export function SherAdminClient() {
             تا پس از انتشار، این‌جا نمایش داده شود.
           </div>
         ) : (
-          rows.map((row) => (
-            <SongCard
-              key={`${reloadKey}-${row.filename}`}
-              row={row}
-              onPatch={patchRow}
-              onRefresh={refreshList}
-              notify={notify}
-            />
-          ))
+          <>
+            {/* تب‌های فیلتر بخش — شمارش «x/۲۰» از فهرست موجود (فقط فایل‌دارها) */}
+            <div className="flex flex-wrap gap-1.5">
+              {(
+                [
+                  { key: "all", label: "همه" },
+                  ...SHER_CATEGORIES.map((c) => ({ key: c as CatFilter, label: CAT_LABELS[c] })),
+                  { key: "none", label: "بدون بخش" },
+                ] as { key: CatFilter; label: string }[]
+              ).map((tab) => {
+                const active = catFilter === tab.key;
+                const inSection = tab.key !== "all" && tab.key !== "none";
+                const n = tab.key === "all" ? fileRows.length : catCount(tab.key === "none" ? "" : tab.key);
+                return (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    onClick={() => setCatFilter(tab.key)}
+                    aria-pressed={active}
+                    className={`flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-bold transition-colors ${
+                      active
+                        ? "border-emerald-500/60 bg-emerald-500/15 text-emerald-200"
+                        : "border-zinc-800 bg-zinc-950/40 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
+                    }`}
+                  >
+                    {tab.label}
+                    <span
+                      className={`rounded-full px-1.5 py-0.5 text-[10px] font-black ${
+                        active ? "bg-emerald-500/20 text-emerald-300" : "bg-zinc-800 text-zinc-500"
+                      }`}
+                    >
+                      {inSection ? `${faDigits(n)}/${faDigits(SHER_CATEGORY_SONGS_MAX)}` : faDigits(n)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {visibleRows.length === 0 ? (
+              <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-8 text-center text-sm text-zinc-400">
+                آهنگی در این بخش نیست — از تب «بدون بخش» یکی را دسته‌بندی کن یا فایل تازه آپلود کن.
+              </div>
+            ) : (
+              visibleRows.map((row) => (
+                <SongCard
+                  key={`${reloadKey}-${row.filename}`}
+                  row={row}
+                  onPatch={patchRow}
+                  onRefresh={refreshList}
+                  notify={notify}
+                />
+              ))
+            )}
+          </>
         )}
       </main>
     </div>

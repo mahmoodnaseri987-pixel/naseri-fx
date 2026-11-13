@@ -3,13 +3,19 @@ import path from "node:path";
 import { db } from "@/lib/db";
 import { sherGuard } from "@/lib/sher-auth";
 import { githubPutFile } from "@/lib/sher-github";
+import { SHER_CATEGORY_SONGS_MAX, isSherCategory } from "@/lib/sher-shared";
+import manifest from "@/data/sher-manifest.json";
 
 /* آپلود تکه‌تکهٔ فایل صوتی «شعر یادت نره» از پنل ادمین.
    ورکل سقف بدنهٔ درخواست ~۴.۵ مگابایت دارد، پس هر تکه (~۹۰۰ کیلوبایت
    محتوای خام) جداگانه می‌آید و در جدول SherUploadChunk جمع می‌شود؛
    وقتی همهٔ تکه‌ها رسیدند، فایل کامل با GitHub Contents API در
    public/sher/songs/<filename> روی main کامیت می‌شود تا ورکل deploy
-   بزند و فایل استاتیک سرو شود. تکه‌ها پس از نتیجهٔ نهایی پاک می‌شوند. */
+   بزند و فایل استاتیک سرو شود. تکه‌ها پس از نتیجهٔ نهایی پاک می‌شوند.
+   بخش آهنگ با هر تکه می‌آید: پیش از کامیت، سقف ۲۰ آهنگِ فایل‌دارِ همان
+   بخش گارد می‌شود (تکه‌ها برای جاروب ۲۴ساعته رها می‌شوند) و بعد از
+   کامیت موفق، ردیف SherSong (اگر نیست) با همان بخش ساخته می‌شود —
+   عنوان و مصرع‌ها مثل قبل با «songs/upsert» ذخیره می‌شوند. */
 
 const MAX_CHUNK_BYTES = Math.floor(1.2 * 1024 * 1024); // سقف محتوای هر تکه پس از decode — ~۱.۲ مگابایت
 const MAX_TOTAL_BYTES = 15 * 1024 * 1024; // سقف کل فایل صوتی — ۱۵ مگابایت
@@ -18,6 +24,8 @@ const EXTENSIONS = new Set(["mp3", "wav", "m4a", "ogg", "flac"]);
 const SONGS_DIR = "public/sher/songs"; // مسیر ثابت آهنگ‌ها در مخزن
 const UPLOAD_ID_RE = /^[A-Za-z0-9-]{8,64}$/; // uploadId از crypto.randomUUID
 const BASE64_RE = /^[A-Za-z0-9+/]+={0,2}$/;
+
+type ManifestFile = { filename: string; size: number };
 
 const bad = (message: string) => NextResponse.json({ error: message }, { status: 400 });
 
@@ -75,6 +83,9 @@ export async function POST(req: NextRequest) {
   if (chunkBytes === 0 || chunkBytes > MAX_CHUNK_BYTES)
     return bad("حجم تکه خارج از محدودهٔ مجاز است.");
 
+  /* بخش آهنگ — با هر تکه فرستاده می‌شود؛ نامعتبر → بدون بخش */
+  const category = isSherCategory(body.category) ? body.category : "";
+
   /* --- ذخیرهٔ تکه (upsert با کلید یکتای uploadId+idx) --- */
   await db.sherUploadChunk.upsert({
     where: { uploadId_idx: { uploadId, idx: index } },
@@ -100,6 +111,25 @@ export async function POST(req: NextRequest) {
     }
 
     const content = Buffer.concat(parts).toString("base64");
+
+    /* سقف ۲۰ آهنگ فایل‌دار در هر بخش — پیش از کامیت گیت‌هاب؛ در خطا تکه‌ها
+       برای جاروب خودکار ۲۴ساعته رها می‌شوند (پاک‌سازی دستی لازم نیست) */
+    if (category) {
+      const [inCategory, files] = await Promise.all([
+        db.sherSong.findMany({ where: { category }, select: { filename: true } }),
+        Promise.resolve(manifest.files as ManifestFile[]),
+      ]);
+      const backed = new Set(files.map((f) => f.filename));
+      /* جایگزینی همین فایل موجود، شمارش بخش را بالا نمی‌برد */
+      const filled = inCategory.filter((r) => backed.has(r.filename) && r.filename !== filename).length;
+      if (filled >= SHER_CATEGORY_SONGS_MAX) {
+        return NextResponse.json(
+          { ok: false, done: false, error: "این بخش پر است — حداکثر ۲۰ آهنگ در هر بخش." },
+          { status: 409 },
+        );
+      }
+    }
+
     const result = await githubPutFile(
       `${SONGS_DIR}/${filename}`,
       content,
@@ -110,6 +140,13 @@ export async function POST(req: NextRequest) {
 
     if (!result.ok)
       return NextResponse.json({ ok: false, done: false, error: result.error }, { status: 502 });
+
+    /* پس از کامیت موفق، ردیف متادیتا (اگر نیست) با همین بخش ساخته می‌شود؛
+       تا انتشار بعدی در فهرست با وضعیت «بدون فایل» دیده می‌شود */
+    await db.sherSong
+      .upsert({ where: { filename }, update: {}, create: { filename, category } })
+      .catch(() => undefined);
+
     return NextResponse.json({ ok: true, done: true });
   } catch {
     await db.sherUploadChunk.deleteMany({ where: { uploadId } }).catch(() => undefined);

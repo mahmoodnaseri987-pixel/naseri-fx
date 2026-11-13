@@ -30,6 +30,17 @@ export type SherMode = "ffa" | "m1v1" | "m2v2" | "m3v3" | "m4v4" | "t3x2" | "t4x
 
 export const SHER_MODES: readonly SherMode[] = ["ffa", "m1v1", "m2v2", "m3v3", "m4v4", "t3x2", "t4x2"];
 
+/* ---------- بخش‌های آهنگ — چهار دستهٔ ثابت با سقف ۲۰ آهنگ در هر بخش ---------- */
+
+export const SHER_CATEGORIES = ["nostalgia", "rap", "traditional", "modern"] as const;
+export type SherCategory = (typeof SHER_CATEGORIES)[number];
+export const SHER_CATEGORY_SONGS_MAX = 20;
+
+/** گارد بخش معتبر — ورودی نامعتبر (اتاق‌های قدیمی و بدهی‌های خام) را رد می‌کند */
+export function isSherCategory(v: unknown): v is SherCategory {
+  return typeof v === "string" && (SHER_CATEGORIES as readonly string[]).includes(v);
+}
+
 /** ماتریس مجاز مود بر حسب تعداد اعضا — دقیقاً طبق سند طراحی:
     1→ffa | 2→ffa,1v1 | 3→ffa | 4→ffa,2v2 | 5→ffa | 6→ffa,3v3,t3x2 | 7→ffa | 8→ffa,4v4,t4x2 */
 export function sherModesFor(count: number): SherMode[] {
@@ -185,6 +196,7 @@ export type SherRoomState = {
   startedAtMs: number; // پایان شمارش معکوس — قبل از آن هیچ فازی جلو نمی‌رود
   seq: number; // شمارندهٔ تغییرها — گارد «فقط رو به جلو» در ذخیره
   mode: SherMode;
+  category?: SherCategory | ""; // بخش انتخابی میزبان در لابی — فقط برای حفظ در «مسابقه دوباره»؛ موتور فیلتر را در action route انجام می‌دهد
   players: SherPlayerInfo[];
   round: number; // از ۱
   totalRounds: number;
@@ -223,6 +235,7 @@ export type SherView = {
   now: number;
   seq: number;
   mode: SherMode;
+  category: SherCategory | ""; // بخش مسابقه — خالی یعنی اتاق قدیمی/بدون بخش
   round: number; // از ۱
   totalRounds: number;
   phase: SherPhase;
@@ -249,6 +262,18 @@ export function sherLobbyMode(raw: string): SherMode | null {
     if (typeof d.sherMode === "string" && (SHER_MODES as readonly string[]).includes(d.sherMode)) {
       return d.sherMode as SherMode;
     }
+  } catch {
+    /* خراب — پیش‌فرض */
+  }
+  return null;
+}
+
+/** خواندن امن بخش آهنگ انتخابی میزبان از JSON خام state لابی —
+    همان الگوی sherLobbyMode؛ اتاق‌های قدیمی بدون بخش → null */
+export function sherLobbyCategory(raw: string): SherCategory | null {
+  try {
+    const d = JSON.parse(raw) as { sherCategory?: unknown };
+    if (isSherCategory(d.sherCategory)) return d.sherCategory;
   } catch {
     /* خراب — پیش‌فرض */
   }

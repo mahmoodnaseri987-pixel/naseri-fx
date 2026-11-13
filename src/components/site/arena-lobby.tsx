@@ -34,7 +34,7 @@ import { NABARD_GAME_SLUG } from "@/lib/nabard-engine";
 import { JADVAL_GAME_SLUG } from "@/lib/jadval-shared";
 import { PIC_GAME_SLUG } from "@/lib/pic-shared";
 import { LUDO_GAME_SLUG, LUDO_MAX_PLAYERS } from "@/lib/ludo-shared";
-import { SHER_GAME_SLUG } from "@/lib/sher-shared";
+import { SHER_CATEGORIES, SHER_GAME_SLUG, type SherCategory } from "@/lib/sher-shared";
 import type { ArenaGameConfigView, ArenaRoomSummary, MemberInfo } from "@/lib/types";
 
 /* کارت ویژهٔ «میدان آتش آفلاین» که از پنل هم قابل حذف است */
@@ -62,6 +62,7 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
   const [gameSlug, setGameSlug] = useState<string>(ARENA_GAME_SLUG);
   const [playerCount, setPlayerCount] = useState<number>(MAX_PLAYERS);
   const [ageGroup, setAgeGroup] = useState<AgeGroup>("adult");
+  const [sherCategory, setSherCategory] = useState<SherCategory>("nostalgia"); // بخش آهنگ‌های «شعر یادت نره»
 
   /* ظرفیت مجاز بازی انتخابی — منچ حداکثر ۴ نفر (چهار رنگ) */
   const capacityMax = gameSlug === LUDO_GAME_SLUG ? LUDO_MAX_PLAYERS : MAX_PLAYERS;
@@ -117,7 +118,13 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
       const res = await fetch("/api/arena/rooms", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ gameSlug, maxPlayers: playerCount, ageGroup }),
+        // بخش آهنگ‌ها فقط برای «شعر یادت نره» فرستاده می‌شود — بقیهٔ بازی‌ها بدون آن
+        body: JSON.stringify({
+          gameSlug,
+          maxPlayers: playerCount,
+          ageGroup,
+          ...(gameSlug === SHER_GAME_SLUG ? { sherCategory } : {}),
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.code) {
@@ -202,6 +209,14 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
   const fireBannerOn = gamesCfg
     ? (gamesCfg.find((c) => c.slug === FIRE_BANNER_SLUG)?.enabled ?? true)
     : true;
+
+  /* برچسب فارسی/انگلیسی بخش‌های آهنگ — از i18n */
+  const sherCatLabel: Record<SherCategory, string> = {
+    nostalgia: a.sher.catNostalgia,
+    rap: a.sher.catRap,
+    traditional: a.sher.catTraditional,
+    modern: a.sher.catModern,
+  };
 
   /* اگر بازی انتخابی توسط مدیر حذف شده، اولین بازی فعال انتخاب می‌شود */
   useEffect(() => {
@@ -327,6 +342,32 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
                 </button>
               ))}
             </div>
+            )}
+
+            {/* بخش آهنگ‌های «شعر یادت نره» — فقط وقتی همین بازی انتخاب است؛
+                استخر مسابقه هنگام شروع فقط از همین بخش ساخته می‌شود */}
+            {gameSlug === SHER_GAME_SLUG && (
+              <div className="mt-4">
+                <p className="text-xs font-bold text-zinc-400">{a.sher.catLabel}</p>
+                <div className="mt-2 flex flex-wrap gap-1.5" role="radiogroup" aria-label={a.sher.catLabel}>
+                  {SHER_CATEGORIES.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      role="radio"
+                      aria-checked={c === sherCategory}
+                      onClick={() => setSherCategory(c)}
+                      className={`rounded-full border px-3.5 py-2 text-xs font-bold transition-colors ${
+                        c === sherCategory
+                          ? "border-violet-500/60 bg-violet-500/15 text-violet-200"
+                          : "border-zinc-800 bg-zinc-950/40 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
+                      }`}
+                    >
+                      {sherCatLabel[c]}
+                    </button>
+                  ))}
+                </div>
+              </div>
             )}
 
             {/* دعوت‌نامه — تعداد بازیکنان اتاق؛ از ۲ تا ۸ */}

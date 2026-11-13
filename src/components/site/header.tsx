@@ -20,6 +20,46 @@ export function SiteHeader({ logoUrl }: SiteHeaderProps) {
   const { t, lang, toggleLang } = useLang();
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
+  const [onlineCount, setOnlineCount] = useState<number | null>(null); // null = نامشخص/خطا — چیپ مخفی می‌شود
+
+  /* شمارندهٔ آنلاین‌ها — واکشی اول در mount، بعد هر ۳۰ ثانیه؛
+     خطا/آفلاین → عدد کهنه نشان داده نشود و چیپ مخفی شود */
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      try {
+        const res = await fetch("/api/presence/count", { cache: "no-store" });
+        if (!res.ok) throw new Error();
+        const data = (await res.json()) as { count?: unknown };
+        if (alive) setOnlineCount(typeof data.count === "number" ? data.count : null);
+      } catch {
+        if (alive) setOnlineCount(null);
+      }
+    };
+    void load();
+    const id = setInterval(() => {
+      if (document.visibilityState === "visible") void load();
+    }, 30_000);
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
+  }, []);
+
+  const numFmt = (n: number) =>
+    new Intl.NumberFormat(lang === "fa" ? "fa-IR" : "en-US").format(n);
+  const onlineLabel =
+    onlineCount === null ? "" : onlineCount === 0 ? t.nav.onlineNone : t.nav.onlineCount.replace("{n}", numFmt(onlineCount));
+
+  const OnlineChip = (
+    <span
+      title={lang === "fa" ? "افراد آنلاین سایت" : "People online now"}
+      className="flex shrink-0 items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs font-semibold text-emerald-300"
+    >
+      <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" aria-hidden="true" />
+      {onlineLabel}
+    </span>
+  );
 
   const navItems = [
     { label: t.nav.apps, href: "#apps" },
@@ -66,7 +106,7 @@ export function SiteHeader({ logoUrl }: SiteHeaderProps) {
           </a>
 
           {/* Desktop nav */}
-          <nav className="hidden md:flex items-center gap-8" aria-label={lang === "fa" ? "منوی اصلی" : "Main navigation"}>
+          <nav className="hidden md:flex items-center gap-6" aria-label={lang === "fa" ? "منوی اصلی" : "Main navigation"}>
             {navItems.map((item) => (
               <a
                 key={item.href}
@@ -76,6 +116,8 @@ export function SiteHeader({ logoUrl }: SiteHeaderProps) {
                 {item.label}
               </a>
             ))}
+            {/* آنلاین‌های الان سایت — از heartbeat اعضا؛ تا پاسخ سرور مخفی است */}
+            {onlineCount !== null && OnlineChip}
           </nav>
 
           <div className="hidden md:flex items-center gap-3">
@@ -139,6 +181,8 @@ export function SiteHeader({ logoUrl }: SiteHeaderProps) {
                       {item.label}
                     </a>
                   ))}
+                  {/* آنلاین‌های الان — داخل منوی موبایل هم دیده شود */}
+                  <div className="px-3 pt-2">{onlineCount !== null && OnlineChip}</div>
                   <div className="mt-4 px-2">
                     <Button asChild className="w-full rounded-full bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-semibold">
                       <a href="#contact" onClick={() => setOpen(false)}>

@@ -36,6 +36,8 @@ import {
   SHER_LEVEL_POINTS,
   SHER_LISTEN_MS,
   SHER_REVEAL_MS,
+  isSherCategory,
+  type SherCategory,
   type SherLevel,
   type SherMode,
 } from "@/lib/sher-shared";
@@ -159,6 +161,13 @@ export function SherClient({
     2: s.level2,
     3: s.level3,
     4: s.level4,
+  };
+  /* برچسب بخش آهنگ — بج کنار عنوان فقط برای بخش معتبر */
+  const catLabel: Record<SherCategory, string> = {
+    nostalgia: s.catNostalgia,
+    rap: s.catRap,
+    traditional: s.catTraditional,
+    modern: s.catModern,
   };
 
   const remainingMs = Math.max(0, sher.phaseEnds - serverNow);
@@ -323,8 +332,13 @@ export function SherClient({
             <Music className="h-5 w-5 text-violet-400" aria-hidden="true" />
             {t.arena.gameSher}
           </h1>
-          <p className="mt-0.5 text-xs text-zinc-500">
+          <p className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
             {s.round} {numFmt(sher.round)} {s.of} {numFmt(sher.totalRounds)} — {modeLabel[sher.mode]}
+            {isSherCategory(sher.category) && (
+              <span className="rounded-full border border-violet-500/40 bg-violet-500/10 px-2 py-0.5 text-[10px] font-bold text-violet-300">
+                {s.catBadge}: {catLabel[sher.category]}
+              </span>
+            )}
           </p>
         </div>
         {isCountdown ? (

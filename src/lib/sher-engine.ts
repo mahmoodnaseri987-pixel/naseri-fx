@@ -340,6 +340,7 @@ export function buildSherView(
     now,
     seq: st.seq,
     mode: st.mode,
+    category: st.category ?? "", // بخش مسابقه — برای بج کنار عنوان؛ خالی یعنی اتاق قدیمی
     round: st.round,
     totalRounds: st.totalRounds,
     phase: st.phase,

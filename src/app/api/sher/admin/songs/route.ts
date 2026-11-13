@@ -44,6 +44,7 @@ export async function GET() {
       contextLines: parseLines(rec?.contextLines ?? "[]"),
       extraLines: parseLines(rec?.extraLines ?? "[]"),
       active: rec?.active ?? false,
+      category: rec?.category ?? "",
       status: (rec && rec.title && rec.answerLine ? "ready" : "draft") as SongStatus,
     };
   });
@@ -62,6 +63,7 @@ export async function GET() {
       contextLines: parseLines(rec.contextLines),
       extraLines: parseLines(rec.extraLines),
       active: rec.active,
+      category: rec.category,
       status: "stale",
     });
   }
