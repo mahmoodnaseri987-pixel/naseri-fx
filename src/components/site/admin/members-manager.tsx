@@ -39,21 +39,28 @@ export function MembersManager() {
   const [deleting, setDeleting] = useState<AdminMember | null>(null);
   const [deletingBusy, setDeletingBusy] = useState(false);
 
-  const load = useCallback(async () => {
-    try {
-      const res = await fetch("/api/admin/members");
-      if (!res.ok) throw new Error();
-      const data = await res.json();
-      setMembers(data.members);
-    } catch {
-      toast({ title: "دریافت لیست اعضا ناموفق بود.", variant: "destructive" });
-    } finally {
-      setLoading(false);
-    }
-  }, [toast]);
+  const load = useCallback(
+    async (quiet = false) => {
+      try {
+        const res = await fetch("/api/admin/members");
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        setMembers(data.members);
+      } catch {
+        /* در پولینگ دوره‌ای بی‌صدا رد می‌شود تا اعلان اسپم نشود */
+        if (!quiet) toast({ title: "دریافت لیست اعضا ناموفق بود.", variant: "destructive" });
+      } finally {
+        setLoading(false);
+      }
+    },
+    [toast],
+  );
 
   useEffect(() => {
     load();
+    /* وضعیت آنلاین زنده بماند — همان پنجرهٔ ۹۰ثانیه‌ای با تپش قلب ۳۰ثانیه‌ای */
+    const id = window.setInterval(() => load(true), 30_000);
+    return () => window.clearInterval(id);
   }, [load]);
 
   async function toggleBlocked(member: AdminMember, blocked: boolean) {
@@ -109,7 +116,7 @@ export function MembersManager() {
         <Button
           variant="outline"
           size="sm"
-          onClick={load}
+          onClick={() => load()}
           className="h-9 rounded-lg border-zinc-700 bg-transparent text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
         >
           <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
@@ -130,6 +137,23 @@ export function MembersManager() {
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <p className="font-bold text-zinc-100">{m.name}</p>
+                {m.online ? (
+                  <Badge
+                    title="در ۹۰ ثانیهٔ گذشته فعالیتی در سایت داشته"
+                    className="flex items-center gap-1.5 border-emerald-500/40 bg-emerald-500/10 text-[11px] text-emerald-300"
+                  >
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" aria-hidden="true" />
+                    آنلاین
+                  </Badge>
+                ) : (
+                  <Badge
+                    title="فعالیتی در ۹۰ ثانیهٔ گذشته نداشته"
+                    className="flex items-center gap-1.5 border-zinc-700 bg-zinc-800/60 text-[11px] text-zinc-400"
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full bg-zinc-500" aria-hidden="true" />
+                    آفلاین
+                  </Badge>
+                )}
                 {m.blocked ? (
                   <Badge className="border-rose-500/40 bg-rose-500/10 text-[11px] text-rose-300">
                     مسدود

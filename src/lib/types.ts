@@ -108,6 +108,7 @@ export type AdminMember = MemberInfo & {
   blocked: boolean;
   lastLoginAt: string | null;
   playCount: number;
+  online: boolean; // heartbeat کمتر از ۹۰ ثانیه پیش — همان تعریف پنجرهٔ آنلاین‌ها
 };
 
 /* ---------- آرنا: مدیریت بازی‌ها و اتاق‌ها (پنل) ---------- */
