@@ -88,7 +88,7 @@ export async function decryptSecret(box: string): Promise<string | null> {
 
 const MAIL_KEY_ROW = "mail_resend_key"; // رمزنگاری‌شده در SiteContent
 const MAIL_FROM_ROW = "mail_from"; // متن ساده (فرستنده، مخفی نیست)
-const DEFAULT_FROM = "Naseri <onboarding@resend.dev>";
+const DEFAULT_FROM = "Entertainment Café <onboarding@resend.dev>";
 
 export type MailConfig = {
   apiKey: string;

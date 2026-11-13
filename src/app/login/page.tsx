@@ -6,7 +6,7 @@ import { AuthForm } from "@/components/site/auth-form";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "ورود اعضا | ناصری",
+  title: "ورود اعضا | کافه سرگرمی",
 };
 
 export default async function LoginPage({

@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
     const emailMatch = from.match(/<([^>]+)>/)?.[1] ?? from;
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailMatch)) {
       return NextResponse.json(
-        { error: "فرستنده باید یک ایمیل معتبر داشته باشد؛ مثل Naseri <no-reply@domain.com>" },
+        { error: "فرستنده باید یک ایمیل معتبر داشته باشد؛ مثل Entertainment Café <no-reply@domain.com>" },
         { status: 400 },
       );
     }

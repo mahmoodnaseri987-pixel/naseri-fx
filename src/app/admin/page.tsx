@@ -91,7 +91,7 @@ export default function AdminPage() {
               <Terminal className="h-4 w-4 text-emerald-400" aria-hidden="true" />
             </span>
             <div className="leading-tight">
-              <p className="text-sm font-bold text-zinc-100">پنل مدیریت ناصری</p>
+              <p className="text-sm font-bold text-zinc-100">پنل مدیریت کافه سرگرمی</p>
               <p className="text-[10px] text-zinc-500">mahmoudnaseri.vercel.app</p>
             </div>
           </div>

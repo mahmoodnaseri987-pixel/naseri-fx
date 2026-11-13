@@ -8,7 +8,7 @@ import { getAuthed } from "@/lib/admin";
 import { ensureSetup } from "@/lib/public-data";
 
 export const metadata: Metadata = {
-  title: "میدان آتش — آفلاین | ناصری",
+  title: "میدان آتش — آفلاین | کافه سرگرمی",
   description:
     "شوتر موجی تک‌نفره — کاملاً آفلاین در مرورگر اجرا می‌شود؛ با کیبورد و موس روی کامپیوتر، با دو اهرم لمسی روی موبایل. بدون عضویت، بدون تاخیر.",
 };

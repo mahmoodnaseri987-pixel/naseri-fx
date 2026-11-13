@@ -44,7 +44,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10">
           <Terminal className="h-6 w-6 text-emerald-400" aria-hidden="true" />
         </div>
-        <h2 className="mt-4 text-lg font-extrabold text-zinc-50">پنل مدیریت ناصری</h2>
+        <h2 className="mt-4 text-lg font-extrabold text-zinc-50">پنل مدیریت کافه سرگرمی</h2>
         <p className="mt-1 text-sm text-zinc-500">برای مدیریت محتوای سایت وارد شوید</p>
       </div>
 

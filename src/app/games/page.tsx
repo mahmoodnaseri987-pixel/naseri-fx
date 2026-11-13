@@ -7,7 +7,7 @@ import { getPublishedGames, getFullSettings } from "@/lib/public-data";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "بازی‌ها | ناصری",
+  title: "بازی‌ها | کافه سرگرمی",
   description: "بازی‌های مرورگری — فقط برای اعضای سایت",
 };
 

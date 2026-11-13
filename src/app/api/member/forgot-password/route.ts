@@ -66,12 +66,12 @@ export async function POST(req: NextRequest) {
   if (channel === "sms") {
     delivered = await sendSms(
       member.username,
-      `ناصری | Naseri\nکد بازیابی رمز عبور: ${code}\nاعتبار: ۱۰ دقیقه`,
+      `کافه سرگرمی | Entertainment Café\nکد بازیابی رمز عبور: ${code}\nاعتبار: ۱۰ دقیقه`,
     );
   } else if (channel === "email") {
     delivered = await sendEmail(
       member.username,
-      "بازیابی رمز عبور | ناصری",
+      "بازیابی رمز عبور | کافه سرگرمی",
       `سلام ${member.name}،\n\nکد بازیابی رمز عبور شما: ${code}\nاین کد ۱۰ دقیقه اعتبار دارد.\n\nاگر شما درخواست نداده‌اید این پیام را نادیده بگیرید.`,
     );
   }

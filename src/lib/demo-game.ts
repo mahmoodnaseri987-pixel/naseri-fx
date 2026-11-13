@@ -81,7 +81,7 @@ export const DEMO_GAME_HTML = `<!DOCTYPE html>
     <button class="btn" id="nextBtn" style="display:none">واژه بعدی</button>
     <button class="btn ghost" id="giveBtn">واژه جدید</button>
   </div>
-  <p class="foot">فقط اعضای سایت ناصری — موفق باشی!</p>
+  <p class="foot">فقط اعضای کافه سرگرمی — موفق باشی!</p>
 </div>
 
 <script>

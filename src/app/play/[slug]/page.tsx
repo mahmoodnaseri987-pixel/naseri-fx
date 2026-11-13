@@ -10,7 +10,7 @@ import { PhotoGate } from "@/components/site/photo-gate";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "اجرا | ناصری",
+  title: "اجرا | کافه سرگرمی",
 };
 
 export default async function PlayPage({

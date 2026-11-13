@@ -5,11 +5,11 @@ import { LanguageProvider } from "@/components/site/language-provider";
 import { FireRoomBanner } from "@/components/site/fire-room-banner";
 
 export const metadata: Metadata = {
-  title: "ناصری | محمود ناصری — سازنده اپلیکیشن موبایل",
+  title: "کافه سرگرمی | محمود ناصری — سازنده اپلیکیشن موبایل",
   description:
     "اپلیکیشن‌های موبایلی که مشکلات واقعی روزمره را حل می‌کنند — ساخته محمود ناصری. دانلود از کافه‌بازار و گوگل‌پلی، سفارش اپ اختصاصی و ارتباط مستقیم.",
   keywords: [
-    "ناصری",
+    "کافه سرگرمی",
     "محمود ناصری",
     "اپلیکیشن موبایل",
     "دانلود اپ",
@@ -22,9 +22,9 @@ export const metadata: Metadata = {
     icon: "/favicon.svg",
   },
   openGraph: {
-    title: "ناصری | محمود ناصری",
+    title: "کافه سرگرمی | محمود ناصری",
     description: "اپ‌هایی که کارهای روزمره را ساده‌تر می‌کنند.",
-    siteName: "ناصری",
+    siteName: "کافه سرگرمی",
     type: "website",
     locale: "fa_IR",
   },

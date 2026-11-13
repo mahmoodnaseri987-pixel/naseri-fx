@@ -9,7 +9,7 @@ import { getFullSettings, ensureSetup } from "@/lib/public-data";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "آرنا | ناصری",
+  title: "آرنا | کافه سرگرمی",
   description: "اتاق‌های رقابتی — بازی گروهی و تک‌به‌تک با دیگر اعضا",
 };
 

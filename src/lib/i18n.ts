@@ -3,7 +3,7 @@ export type Lang = "fa" | "en";
 export const dict = {
   fa: {
     dir: "rtl" as const,
-    brand: "ناصری",
+    brand: "کافه سرگرمی",
     fullName: "محمود ناصری",
     role: "توسعه‌دهنده و سازنده اپلیکیشن موبایل",
     nav: {
@@ -19,7 +19,7 @@ export const dict = {
     orderCta: "ارتباط مستقیم",
     gamesSection: {
       badge: "گیم‌کلاب",
-      title: "بازی‌های مرورگری ناصری",
+      title: "بازی‌های مرورگری کافه سرگرمی",
       subtitle:
         "برای اجرای هر بازی کافیست عضو سایت باشی؛ ثبت‌نام چند ثانیه بیشتر طول نمی‌کشد و رایگان است.",
       playCta: "اجرا",
@@ -512,7 +512,7 @@ export const dict = {
     roadmap: {
       badge: "نقشه راه",
       title: "این‌جا کجاست و قرار است چه شود؟",
-      p1: "ناصری برای جمع‌های خانوادگی، دورهمی دوستانه و هر جایی که حال خوب لازم است ساخته شده؛ جایی که بازی، شور و اشتیاق و خنده می‌آورد. همین حالا می‌توانی در آرنا با دوستانت اتاق بسازی و گروهی بازی کنی — و این تازه آغاز راه است.",
+      p1: "کافه سرگرمی برای جمع‌های خانوادگی، دورهمی دوستانه و هر جایی که حال خوب لازم است ساخته شده؛ جایی که بازی، شور و اشتیاق و خنده می‌آورد. همین حالا می‌توانی در آرنا با دوستانت اتاق بسازی و گروهی بازی کنی — و این تازه آغاز راه است.",
       progressLabel: "جای ما در نقشه: حدود ۱۵٪ از مسیر",
       progressNote: "مسیر بزرگ پیش روست، ولی پایه‌ها محکم گذاشته شده است — با همراهی شما این‌جا هر هفته بزرگ‌تر می‌شود.",
       ph1Title: "شروع ماجراجویی",
@@ -551,13 +551,13 @@ export const dict = {
       replyNote: "معمولاً در کمتر از چند ساعت پاسخ می‌دهم",
     },
     footer: {
-      madeWith: "© ۱۴۰۴ ناصری — ساخته‌شده با علاقه در تهران",
+      madeWith: "© ۱۴۰۴ کافه سرگرمی — ساخته‌شده با علاقه در تهران",
       admin: "مدیریت سایت",
     },
   },
   en: {
     dir: "ltr" as const,
-    brand: "Naseri",
+    brand: "Entertainment Café",
     fullName: "Mahmoud Naseri",
     role: "Mobile App Developer & Maker",
     nav: {
@@ -573,7 +573,7 @@ export const dict = {
     orderCta: "Get in touch",
     gamesSection: {
       badge: "Game Club",
-      title: "Browser games by Naseri",
+      title: "Browser games by Entertainment Café",
       subtitle:
         "Just be a member to play — sign-up takes seconds and it's free.",
       playCta: "Play",
@@ -1066,7 +1066,7 @@ export const dict = {
     roadmap: {
       badge: "Roadmap",
       title: "Where you are — and where this is going",
-      p1: "Naseri is built for family gatherings, friendly get-togethers and anywhere that needs a good vibe — a place where games bring excitement, laughter and joy. Right now you can create a room in the Arena and play together with your friends — and this is just the beginning of the journey.",
+      p1: "Entertainment Café is built for family gatherings, friendly get-togethers and anywhere that needs a good vibe — a place where games bring excitement, laughter and joy. Right now you can create a room in the Arena and play together with your friends — and this is just the beginning of the journey.",
       progressLabel: "Where we are: roughly 15% of the journey",
       progressNote: "A long road lies ahead, but the foundations are solid — with you on board, this place grows every week.",
       ph1Title: "The adventure begins",
@@ -1105,7 +1105,7 @@ export const dict = {
       replyNote: "I usually reply within a few hours",
     },
     footer: {
-      madeWith: "© 2025 Naseri — Crafted with love in Tehran",
+      madeWith: "© 2025 Entertainment Café — Crafted with love in Tehran",
       admin: "Site admin",
     },
   },

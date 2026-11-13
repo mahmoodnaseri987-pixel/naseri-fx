@@ -3,7 +3,7 @@ import { LanguageProvider } from "@/components/site/language-provider";
 import { FireOnline } from "@/components/site/fire-online";
 
 export const metadata: Metadata = {
-  title: "میدان آتش — گروهی آنلاین | ناصری",
+  title: "میدان آتش — گروهی آنلاین | کافه سرگرمی",
   description:
     "نبرد گروهی تیمی در اتاق‌های کد-محور — دو تیم، تا ۸ نفر، با ربات‌های کمکی. کد اتاق را با دوستانت به اشتراک بگذار و بجنگ.",
 };

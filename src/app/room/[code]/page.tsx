@@ -8,7 +8,7 @@ import { getFullSettings, ensureSetup } from "@/lib/public-data";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "اتاق بازی | ناصری",
+  title: "اتاق بازی | کافه سرگرمی",
 };
 
 export default async function RoomPage({

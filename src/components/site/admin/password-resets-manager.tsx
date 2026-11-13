@@ -196,7 +196,7 @@ function MailConfigCard() {
             dir="ltr"
             value={from}
             onChange={(e) => setFrom(e.target.value)}
-            placeholder="Naseri <no-reply@naseri.dev>"
+            placeholder="Entertainment Café <no-reply@naseri.dev>"
             className="h-9 rounded-lg border-zinc-700 bg-zinc-950/60 text-xs text-zinc-100 placeholder:text-zinc-600"
           />
         </div>
