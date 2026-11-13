@@ -10,8 +10,10 @@ import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   Ban,
+  BookOpenText,
   Check,
   Crown,
+  Grid3x3,
   Loader2,
   Lock,
   MessageCircle,
@@ -30,6 +32,8 @@ import { ChatPanel } from "@/components/site/chat-panel";
 import { subscribeStream, type StreamStatus } from "@/lib/realtime";
 import { sfxAmbientStart, sfxAmbientStop, sfxIsMuted, sfxLose, sfxToggleMuted, sfxWin } from "@/lib/arena-sfx";
 import {
+  JADVAL_DIFF_LABELS,
+  JADVAL_MODE_LABELS,
   JADVAL_TEAM_LABELS,
   cleanAnswerInput,
   type JadvalTeam,
@@ -312,8 +316,23 @@ export function JadvalClient({
   const [sendingAgain, setSendingAgain] = useState(false);
   const [chatOpen, setChatOpen] = useState(false); // چت شناور موبایل
   const [muted, setMuted] = useState(false); // افکت‌های صوتی
+  const [sherTab, setSherTab] = useState<"text" | "grid">("text"); // تب موبایل حالت شرح‌در‌متن
+  const answerRef = useRef<HTMLInputElement>(null);
   const stingerRef = useRef("");
   const aliveRef = useRef(true);
+
+  /* انتخاب واژه + فوکوس لمسی — روی موبایل نوار پاسخ خودش می‌آید جلوی چشم */
+  const pickWord = useCallback((i: number) => {
+    setSelected(i);
+    requestAnimationFrame(() => {
+      if (window.innerWidth < 1024) {
+        answerRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        answerRef.current?.focus({ preventScroll: true });
+      } else {
+        answerRef.current?.focus({ preventScroll: true });
+      }
+    });
+  }, []);
 
   const numFmt = useCallback(
     (n: number) => new Intl.NumberFormat(lang === "fa" ? "fa-IR" : "en-US").format(n),
@@ -391,6 +410,7 @@ export function JadvalClient({
 
   const now = Date.now();
   const beforeStart = now < jadval.startedAtMs;
+  const isSher = jadval.mode === "sher";
   const lockRemainMs = jadval.lockUntilMs > 0 ? jadval.lockUntilMs - now : 0;
   const lockSeconds = Math.max(0, Math.ceil(lockRemainMs / 1000));
   const isLocked = lockRemainMs > 0;
@@ -475,7 +495,7 @@ export function JadvalClient({
         (cur.d === "h" && cur.i === across.i) || (cur.d === "v" && cur.i === down.i);
       if (curHas) next = cur.d === "h" ? down : across; // تعویض جهت با کلیک دوباره
     }
-    if (next) setSelected(next.i);
+    if (next) pickWord(next.i);
   }
 
   async function again() {
@@ -626,11 +646,25 @@ export function JadvalClient({
     <div className="mx-auto max-w-6xl px-3 py-6 sm:px-6 sm:py-8">
       {/* نوار بالا: عنوان و زمان */}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <h1 className="truncate text-lg font-extrabold text-zinc-50 sm:text-xl">
             {jadval.puzzle.title}
           </h1>
-          <p className="mt-0.5 text-xs text-zinc-500">{j.hintInterlock}</p>
+          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+            <span
+              className={`rounded-full border px-2 py-0.5 text-[10px] font-black ${
+                JADVAL_DIFF_LABELS[jadval.puzzle.diff].tone
+              }`}
+            >
+              {JADVAL_DIFF_LABELS[jadval.puzzle.diff][lang === "fa" ? "fa" : "en"]}
+            </span>
+            {isSher && (
+              <span className="rounded-full border border-sky-500/40 bg-sky-500/10 px-2 py-0.5 text-[10px] font-black text-sky-300">
+                {JADVAL_MODE_LABELS.sher[lang === "fa" ? "fa" : "en"]}
+              </span>
+            )}
+          </div>
+          <p className="mt-1 hidden text-xs text-zinc-500 sm:block">{j.hintInterlock}</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -689,13 +723,59 @@ export function JadvalClient({
       </div>
 
       <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_290px]">
-        {/* ستون اصلی: جدول + پاسخ */}
+        {/* ستون اصلی: جدول/متن + پاسخ */}
         <div className="min-w-0">
-          <JadvalGrid view={jadval} onCellClick={selectCell} selected={activeWordIdx} />
+          {/* حالت شرح‌در‌متن: تب موبایل متن/جدول — دسکتاپ هر دو را می‌بیند */}
+          {isSher && (
+            <div className="mb-3 grid grid-cols-2 gap-1.5 lg:hidden" role="tablist" aria-label={j.sherReadLabel}>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={sherTab === "text"}
+                onClick={() => setSherTab("text")}
+                className={`flex h-10 items-center justify-center gap-1.5 rounded-xl border text-sm font-bold transition-colors ${
+                  sherTab === "text"
+                    ? "border-amber-500/60 bg-amber-500/10 text-amber-200"
+                    : "border-zinc-800 bg-zinc-950/40 text-zinc-400"
+                }`}
+              >
+                <BookOpenText className="h-4 w-4" aria-hidden="true" />
+                {j.sherText}
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={sherTab === "grid"}
+                onClick={() => setSherTab("grid")}
+                className={`flex h-10 items-center justify-center gap-1.5 rounded-xl border text-sm font-bold transition-colors ${
+                  sherTab === "grid"
+                    ? "border-amber-500/60 bg-amber-500/10 text-amber-200"
+                    : "border-zinc-800 bg-zinc-950/40 text-zinc-400"
+                }`}
+              >
+                <Grid3x3 className="h-4 w-4" aria-hidden="true" />
+                {j.sherGrid}
+              </button>
+            </div>
+          )}
 
-          {/* راهنمای خانه‌های خط‌خورده */}
+          {isSher ? (
+            <div className={`${sherTab === "text" ? "block" : "hidden"} lg:block`}>
+              <SherPanel
+                view={jadval}
+                selected={activeWordIdx}
+                solvedSet={solvedSet}
+                lostSet={lostSet}
+                onSelect={pickWord}
+              />
+            </div>
+          ) : (
+            <JadvalGrid view={jadval} onCellClick={selectCell} selected={activeWordIdx} />
+          )}
+
+          {/* راهنما — کلاسیک: خانه‌های خط‌خورده / شرح‌در‌متن: نحوهٔ کار با متن */}
           <p className="mt-2 text-center text-[11px] leading-5 text-zinc-500">
-            {j.lostLegend}
+            {isSher ? j.sherNote : j.lostLegend}
           </p>
 
           {/* نوار ثبت واژه */}
@@ -705,7 +785,11 @@ export function JadvalClient({
                 <span className="me-1.5 inline-flex h-6 min-w-6 items-center justify-center rounded-md bg-violet-500/15 px-1.5 text-xs font-black text-violet-300">
                   {numFmt(selectedWord.num)}
                 </span>
-                {selectedWord.clue}
+                {selectedWord.clue && (
+                  <span className="text-sm font-bold text-zinc-200">
+                    {isSher && selectedWord.sher ? selectedWord.sher : selectedWord.clue}
+                  </span>
+                )}
                 <span className="ms-2 text-[11px] font-bold text-zinc-500">
                   ({selectedWord.d === "h" ? j.across : j.down} — {numFmt(selectedWord.len)})
                 </span>
@@ -745,6 +829,7 @@ export function JadvalClient({
                 className="flex gap-2"
               >
                 <input
+                  ref={answerRef}
                   value={answer}
                   onChange={(e) => setAnswer(cleanAnswerInput(e.target.value))}
                   disabled={!selectedWord || selectedSolved || selectedLost || beforeStart || sending}
@@ -783,27 +868,33 @@ export function JadvalClient({
             )}
           </div>
 
-          {/* فهرست سؤال‌ها */}
-          <div className="mt-5 grid gap-4 sm:grid-cols-2">
-            <ClueList
-              title={j.across}
-              words={acrossWords}
-              selected={activeWordIdx}
-              solvedSet={solvedSet}
-              lostSet={lostSet}
-              onSelect={(i) => setSelected(i)}
-              numFmt={numFmt}
-            />
-            <ClueList
-              title={j.down}
-              words={downWords}
-              selected={activeWordIdx}
-              solvedSet={solvedSet}
-              lostSet={lostSet}
-              onSelect={(i) => setSelected(i)}
-              numFmt={numFmt}
-            />
-          </div>
+          {/* فهرست سؤال‌ها — فقط کلاسیک؛ در شرح‌در‌متن خودِ متن فهرست است و جدول زیرش می‌آید */}
+          {isSher ? (
+            <div className={`${sherTab === "grid" ? "block" : "hidden"} mt-5 lg:block`}>
+              <JadvalGrid view={jadval} onCellClick={selectCell} selected={activeWordIdx} />
+            </div>
+          ) : (
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              <ClueList
+                title={j.across}
+                words={acrossWords}
+                selected={activeWordIdx}
+                solvedSet={solvedSet}
+                lostSet={lostSet}
+                onSelect={(i) => pickWord(i)}
+                numFmt={numFmt}
+              />
+              <ClueList
+                title={j.down}
+                words={downWords}
+                selected={activeWordIdx}
+                solvedSet={solvedSet}
+                lostSet={lostSet}
+                onSelect={(i) => pickWord(i)}
+                numFmt={numFmt}
+              />
+            </div>
+          )}
         </div>
 
         {/* چت شناور موبایل — دکمه گوشهٔ صفحه + پنجرهٔ بازشو */}
@@ -1050,5 +1141,136 @@ function JadvalGrid({
         )}
       </div>
     </div>
+  );
+}
+
+/* ================================================================
+   پنل «شرح‌در‌متن» — صفحهٔ متن به سبک مجلات جدول؛ شرح هر واژه داخل
+   خودِ متن می‌آید و جای پاسخ با خانه‌های حرف نشان داده می‌شود.
+   لمس بزرگ موبایل: هر جمله کل یک دکمهٔ هدف است.
+   ================================================================ */
+
+function SherPanel({
+  view,
+  selected,
+  solvedSet,
+  lostSet,
+  onSelect,
+}: {
+  view: JadvalView;
+  selected: number | null;
+  solvedSet: Set<number>;
+  lostSet: Set<number>;
+  onSelect: (i: number) => void;
+}) {
+  const { lang } = useLang();
+  const size = view.puzzle.size;
+
+  /* ترتیب متن: از شمارهٔ ۱ */
+  const words = useMemo(() => [...view.puzzle.words].sort((a, b) => a.num - b.num), [view.puzzle.words]);
+
+  /* حروف آشکارشدهٔ هر واژه — از خانه‌های تیم من + واژه‌های خط‌خوردهٔ رقیب */
+  const lettersOf = useCallback(
+    (idx: number): string[] => {
+      const w = view.puzzle.words.find((x) => x.i === idx);
+      if (!w) return [];
+      return Array.from(
+        { length: w.len },
+        (_, k) => view.cells[(w.r + (w.d === "v" ? k : 0)) * size + (w.c + (w.d === "h" ? k : 0))] ?? "",
+      );
+    },
+    [view.cells, view.puzzle.words, size],
+  );
+
+  const numFmt = useCallback(
+    (n: number) => new Intl.NumberFormat(lang === "fa" ? "fa-IR" : "en-US").format(n),
+    [lang],
+  );
+
+  return (
+    <section
+      dir="rtl"
+      aria-label={JADVAL_MODE_LABELS.sher[lang === "fa" ? "fa" : "en"]}
+      className="overflow-hidden rounded-2xl border border-amber-500/25 bg-gradient-to-b from-amber-950/60 via-zinc-900 to-zinc-900/70"
+    >
+      {/* سربرگ مجله‌ای */}
+      <div className="border-b border-amber-500/20 bg-amber-500/[0.07] px-4 py-4 text-center sm:px-6">
+        <p className="text-[11px] font-black tracking-[0.35em] text-amber-300/90">
+          ✦ {JADVAL_MODE_LABELS.sher[lang === "fa" ? "fa" : "en"]} ✦
+        </p>
+        <h2 className="mt-1.5 text-xl font-black text-amber-100">{view.puzzle.title}</h2>
+        {view.puzzle.sherIntro && (
+          <p className="mx-auto mt-2.5 max-w-xl text-[13px] leading-7 text-amber-200/75">
+            {view.puzzle.sherIntro}
+          </p>
+        )}
+        <div className="mx-auto mt-3 h-px w-40 bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
+      </div>
+
+      {/* متن — هر جمله یک سؤال است؛ روی جمله بزن و پاسخ بده */}
+      <div className="space-y-2 px-3 py-4 sm:px-5">
+        {words.map((w) => {
+          const solved = solvedSet.has(w.i);
+          const lost = !solved && lostSet.has(w.i);
+          const active = selected === w.i;
+          const letters = lettersOf(w.i);
+          return (
+            <button
+              key={w.i}
+              type="button"
+              onClick={() => onSelect(w.i)}
+              className={`w-full rounded-xl border px-3.5 py-3 text-start transition-colors ${
+                active
+                  ? "border-violet-400/60 bg-violet-500/10 ring-1 ring-violet-400/40"
+                  : solved
+                    ? "border-emerald-500/30 bg-emerald-500/[0.07]"
+                    : lost
+                      ? "border-zinc-700/60 bg-zinc-800/40"
+                      : "border-amber-500/15 bg-amber-500/[0.05] hover:border-amber-400/35 hover:bg-amber-500/[0.09]"
+              }`}
+            >
+              <div className="flex items-start gap-2.5">
+                <span
+                  className={`mt-0.5 flex h-6 min-w-6 shrink-0 items-center justify-center rounded-md px-1.5 text-xs font-black ${
+                    solved
+                      ? "bg-emerald-500/20 text-emerald-300"
+                      : lost
+                        ? "bg-zinc-700/70 text-zinc-400"
+                        : "bg-amber-500/15 text-amber-200"
+                  }`}
+                >
+                  {numFmt(w.num)}
+                </span>
+                <span className={`flex-1 text-[14px] leading-7 ${lost ? "text-zinc-400" : "text-zinc-100"}`}>
+                  {w.sher ?? w.clue}
+                </span>
+                {solved ? (
+                  <Check className="mt-1 h-4 w-4 shrink-0 text-emerald-400" aria-hidden="true" />
+                ) : lost ? (
+                  <Ban className="mt-1 h-4 w-4 shrink-0 text-zinc-500" aria-hidden="true" />
+                ) : null}
+              </div>
+              {/* خانه‌های حرف این واژه — حروف حل‌شده و خط‌خورده از جدول می‌آیند */}
+              <div className="mt-2.5 flex flex-wrap gap-1 ps-9">
+                {letters.map((ch, k) => (
+                  <span
+                    key={k}
+                    className={`flex h-7 w-7 items-center justify-center rounded-md border text-sm font-black ${
+                      ch
+                        ? solved
+                          ? "border-emerald-400/50 bg-emerald-400/10 text-emerald-200"
+                          : "border-zinc-600 bg-zinc-800 text-zinc-200"
+                        : "border-dashed border-zinc-700 bg-zinc-950/60"
+                    }`}
+                  >
+                    {ch || ""}
+                  </span>
+                ))}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </section>
   );
 }

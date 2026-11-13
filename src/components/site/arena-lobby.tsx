@@ -6,12 +6,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  BookOpenText,
   Camera,
   Crown,
   Dices,
   Flame,
   Grid3x3,
   Image as ImageIcon,
+  LayoutGrid,
   Loader2,
   LogIn,
   MessagesSquare,
@@ -34,6 +36,7 @@ import { NABARD_GAME_SLUG } from "@/lib/nabard-engine";
 import { JADVAL_GAME_SLUG } from "@/lib/jadval-shared";
 import { PIC_GAME_SLUG } from "@/lib/pic-shared";
 import { LUDO_GAME_SLUG, LUDO_MAX_PLAYERS } from "@/lib/ludo-shared";
+import { JADVAL_GAME_SLUG } from "@/lib/jadval-shared";
 import { SHER_CATEGORIES, SHER_GAME_SLUG, type SherCategory } from "@/lib/sher-shared";
 import type { ArenaGameConfigView, ArenaRoomSummary, MemberInfo } from "@/lib/types";
 
@@ -63,12 +66,18 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
   const [playerCount, setPlayerCount] = useState<number>(MAX_PLAYERS);
   const [ageGroup, setAgeGroup] = useState<AgeGroup>("adult");
   const [sherCategory, setSherCategory] = useState<SherCategory>("nostalgia"); // بخش آهنگ‌های «شعر یادت نره»
+  const [sherMode, setSherMode] = useState(false); // جدول: حالت شرح‌در‌متن
 
   /* ظرفیت مجاز بازی انتخابی — منچ حداکثر ۴ نفر (چهار رنگ) */
   const capacityMax = gameSlug === LUDO_GAME_SLUG ? LUDO_MAX_PLAYERS : MAX_PLAYERS;
+  const isJadval = gameSlug === JADVAL_GAME_SLUG;
   useEffect(() => {
     if (playerCount > capacityMax) setPlayerCount(capacityMax);
   }, [capacityMax, playerCount]);
+  /* تغییر بازی — حالت شرح‌در‌متن فقط برای جدول است */
+  useEffect(() => {
+    if (!isJadval) setSherMode(false);
+  }, [isJadval]);
 
   const numFmt = useCallback(
     (n: number) => new Intl.NumberFormat(lang === "fa" ? "fa-IR" : "en-US").format(n),
@@ -124,6 +133,7 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
           maxPlayers: playerCount,
           ageGroup,
           ...(gameSlug === SHER_GAME_SLUG ? { sherCategory } : {}),
+          jadvalSher: sherMode, // جدول: حالت شرح‌در‌متن
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -395,12 +405,45 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
               <p className="mt-2 text-[11px] leading-5 text-zinc-500">{a.playersHint}</p>
             </div>
 
-            {/* گروه سنی — سؤال‌های چالش سرعتی و جدول متناسب با سن تنظیم می‌شوند */}
+            {/* حالت رقابت جدول — کلاسیک یا شرح‌در‌متن */}
+            {isJadval && (
+              <div className="mt-4">
+                <p className="text-xs font-bold text-zinc-400">{a.modeLabel}</p>
+                <div className="mt-2 grid grid-cols-2 gap-1.5" role="radiogroup" aria-label={a.modeLabel}>
+                  {[false, true].map((sher) => {
+                    const active = sher === sherMode;
+                    const Icon = sher ? BookOpenText : LayoutGrid;
+                    return (
+                      <button
+                        key={String(sher)}
+                        type="button"
+                        role="radio"
+                        aria-checked={active}
+                        onClick={() => setSherMode(sher)}
+                        className={`flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2.5 text-sm font-bold transition-colors ${
+                          active
+                            ? "border-sky-500/60 bg-sky-500/10 text-sky-200"
+                            : "border-zinc-800 bg-zinc-950/40 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
+                        }`}
+                      >
+                        <Icon className="h-4 w-4" aria-hidden="true" />
+                        {sher ? a.modeSher : a.modeClassic}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="mt-2 text-[11px] leading-5 text-zinc-500">
+                  {sherMode ? a.modeSherHint : a.modeClassicHint}
+                </p>
+              </div>
+            )}
+
+            {/* گروه سنی / سطح جدول — سؤال‌های چالش سرعتی و جدول متناسب با انتخاب تنظیم می‌شوند */}
             <div className="mt-4">
-              <p className="text-xs font-bold text-zinc-400">{a.ageLabel}</p>
-              <div className="mt-2 grid gap-1.5 sm:grid-cols-3" role="radiogroup" aria-label={a.ageLabel}>
+              <p className="text-xs font-bold text-zinc-400">{isJadval ? a.diffLabel : a.ageLabel}</p>
+              <div className="mt-2 grid gap-1.5 sm:grid-cols-3" role="radiogroup" aria-label={isJadval ? a.diffLabel : a.ageLabel}>
                 {AGE_GROUPS.map((g) => {
-                  const label = g === "kid" ? a.ageKid : g === "pro" ? a.agePro : a.ageAdult;
+                  const label = g === "kid" ? (isJadval ? a.diffEasy : a.ageKid) : g === "pro" ? (isJadval ? a.diffPro : a.agePro) : isJadval ? a.diffHard : a.ageAdult;
                   return (
                     <button
                       key={g}
@@ -419,7 +462,7 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
                   );
                 })}
               </div>
-              <p className="mt-2 text-[11px] leading-5 text-zinc-500">{a.ageHint}</p>
+              <p className="mt-2 text-[11px] leading-5 text-zinc-500">{isJadval ? a.diffHint : a.ageHint}</p>
             </div>
 
             <Button

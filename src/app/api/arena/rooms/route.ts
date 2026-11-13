@@ -148,9 +148,9 @@ export async function POST(req: NextRequest) {
           status: "lobby",
           maxPlayers,
           ageGroup, // گروه سنی اتاق روی خود اتاق — تا «مسابقه دوباره» حفظ می‌شود
-          // JSON لابی: گروه سنی + برای sher بخش آهنگ‌ها تا لحظهٔ شروع حفظ شود
+          // JSON لابی: گروه سنی + برای sher بخش آهنگ‌ها و برای جدول حالت شرح‌در‌متن تا لحظهٔ شروع حفظ شود
           state: JSON.stringify(
-            isSherRoom ? { ageGroup, sherCategory } : { ageGroup },
+            isSherRoom ? { ageGroup, sherCategory } : { ageGroup, jadvalSher: body.jadvalSher === true },
           ),
         },
       });

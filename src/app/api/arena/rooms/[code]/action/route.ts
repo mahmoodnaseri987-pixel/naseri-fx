@@ -84,12 +84,25 @@ import {
 import { invalidateRoomSnapshot, parseState, persistFireState, persistLudoState, persistSherState, settleLudo } from "@/lib/arena-live";
 
 /** خواندن امن فرادادهٔ اتاق (مثل گروه سنی) از JSON خام state — قبل از شروع بازی */
-function safeStateMeta(raw: string): { ageGroup?: unknown } {
+function safeStateMeta(raw: string): { ageGroup?: unknown; jadvalSher?: unknown } {
   try {
     const data = JSON.parse(raw);
-    return data && typeof data === "object" ? (data as { ageGroup?: unknown }) : {};
+    return data && typeof data === "object" ? (data as { ageGroup?: unknown; jadvalSher?: unknown }) : {};
   } catch {
     return {};
+  }
+}
+
+/** حالت شرح‌در‌متن اتاق جدول — از متادیتای ساخت اتاق یا خود state جدول
+    (دومی تا «مسابقه دوباره» هم همان حالت را حفظ کند) */
+function roomJadvalSher(room: { state: string }): boolean {
+  const meta = safeStateMeta(room.state);
+  if (meta.jadvalSher !== undefined) return meta.jadvalSher === true;
+  try {
+    const data = JSON.parse(room.state) as { sher?: unknown };
+    return data?.sher === true;
+  } catch {
+    return false;
   }
 }
 
@@ -491,7 +504,8 @@ export async function POST(
       }
       const jState = createJadvalState(
         room.members.map((m) => ({ memberId: m.memberId, name: m.name })),
-        roomAgeGroup(room), // جدول متناسب با گروه سنی انتخاب می‌شود
+        roomAgeGroup(room), // سطح جدول از گروه سنی میزبان: آسان/سخت/حرفه‌ای
+        roomJadvalSher(room), // حالت کلاسیک یا شرح‌در‌متن — از انتخاب میزبان
       );
       const namesOf = (team: JadvalTeam): string =>
         room.members

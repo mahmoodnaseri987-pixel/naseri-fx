@@ -12,6 +12,7 @@ import {
   JADVAL_TEAM_A,
   JADVAL_TEAM_B,
   JADVAL_WIN_BONUS,
+  type JadvalDiff,
   type JadvalRoomState,
   type JadvalResult,
   type JadvalTeam,
@@ -27,6 +28,7 @@ type RawPuzzleWord = {
   len: number;
   num: number;
   clue: string;
+  sher?: string; // شرح بلند ادبی برای حالت شرح‌در‌متن
   ans: string;
 };
 
@@ -34,6 +36,8 @@ type RawPuzzle = {
   id: string;
   title: string;
   size: number;
+  diff?: string; // easy | hard | pro
+  sherIntro?: string; // مقدمهٔ صفحهٔ متن — فقط جدول‌های شرح‌دار
   rows: string[];
   words: RawPuzzleWord[];
 };
@@ -46,17 +50,40 @@ export function jadvalPuzzleCount(): number {
   return PUZZLES.length;
 }
 
+/* جدول شرح‌دار — جدولی که همهٔ واژه‌هایش شرح ادبی دارند و صفحهٔ متن می‌سازند */
+function isSherPuzzle(p: RawPuzzle): boolean {
+  return Boolean(p.sherIntro) && p.words.length > 0 && p.words.every((w) => Boolean(w.sher));
+}
+
+const SHER_PUZZLES = PUZZLES.filter(isSherPuzzle);
+
+function diffOfAge(age: AgeGroup): string {
+  return age === "kid" ? "easy" : age === "pro" ? "pro" : "hard";
+}
+
 /**
  * جدول تصادفی — تا می‌تواند همان جدول قبلی اتاق را تکرار نکند.
- * متناسب با گروه سنی: کودکان ← جدول‌های سبک‌تر (واژه‌های کمتر)،
- * حرفه‌ای‌ها ← جدول‌های سنگین‌تر (واژه‌های بیشتر)، بزرگسالان ← همه.
+ * سطح: گروه سنی به سطح جدول ترجمه می‌شود (کودکان←آسان، بزرگسالان←سخت، حرفه‌ای‌ها←حرفه‌ای)
+ * و از برچسب diff جدول‌ها پوشش می‌گیرد؛ بدون برچسب، مثل قبل بر اساس تعداد واژه.
+ * حالت شرح‌در‌متن فقط از میان جدول‌های شرح‌دار همان سطح انتخاب می‌کند.
  */
-export function pickJadvalPuzzle(excludeId?: string, age: AgeGroup = "adult"): RawPuzzle {
-  let pool: RawPuzzle[] = PUZZLES;
-  if (age !== "adult") {
+export function pickJadvalPuzzle(excludeId?: string, age: AgeGroup = "adult", sher = false): RawPuzzle {
+  const diff = diffOfAge(age);
+
+  if (sher && SHER_PUZZLES.length > 0) {
+    let pool = SHER_PUZZLES.filter((p) => p.diff === diff);
+    if (pool.length === 0) pool = SHER_PUZZLES; // همین سطح شرح‌دار نداشت — از هر سطح شرح‌دار
+    if (pool.length > 1 && excludeId) pool = pool.filter((p) => p.id !== excludeId);
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+
+  let pool = PUZZLES.filter((p) => p.diff === diff);
+  if (pool.length === 0) {
+    /* بانک بدون برچسب سطح — ثلث‌بندی بر اساس تعداد واژه (رفتار قدیمی) */
     const sorted = [...PUZZLES].sort((a, b) => a.words.length - b.words.length);
     const third = Math.max(1, Math.floor(sorted.length / 3));
-    pool = age === "kid" ? sorted.slice(0, third) : sorted.slice(-third);
+    pool = age === "kid" ? sorted.slice(0, third) : age === "pro" ? sorted.slice(-third) : sorted.slice(third, -third);
+    if (pool.length === 0) pool = PUZZLES;
   }
   if (pool.length > 1 && excludeId) pool = pool.filter((p) => p.id !== excludeId);
   return pool[Math.floor(Math.random() * pool.length)];
@@ -71,20 +98,23 @@ function getPuzzle(id: string): RawPuzzle | null {
 export function createJadvalState(
   members: { memberId: string; name: string }[],
   ageRaw: unknown = "adult",
+  sherRaw: unknown = false,
 ): JadvalRoomState {
   const age: AgeGroup = normalizeAgeGroup(ageRaw);
+  const sher = sherRaw === true; // حالت شرح‌در‌متن — فقط از بانک شرح‌دار
   /* تیم‌بندی متوازن: به ترتیب ورود، یکی‌درمیان */
   const teams: Record<string, JadvalTeam> = {};
   const ordered = [...members].sort((a, b) => a.memberId.localeCompare(b.memberId));
   ordered.forEach((m, idx) => {
     teams[m.memberId] = idx % 2 === 0 ? JADVAL_TEAM_A : JADVAL_TEAM_B;
   });
-  const puzzle = pickJadvalPuzzle(undefined, age);
+  const puzzle = pickJadvalPuzzle(undefined, age, sher);
   return {
     game: "jadval-race",
     startedAtMs: Date.now() + JADVAL_START_DELAY_MS,
     matchMs: JADVAL_MATCH_MS,
     puzzleId: puzzle.id,
+    sher,
     teams,
     solved: { A: [], B: [] },
     wrongs: { A: 0, B: 0 },
@@ -107,6 +137,8 @@ export function parseJadvalState(raw: string): JadvalRoomState | null {
       Array.isArray(data.solved.B) &&
       data.lockUntil
     ) {
+      /* حالت شرح‌در‌متن در state‌های قدیمی نیست — false تلقی می‌شود */
+      data.sher = data.sher === true;
       return data;
     }
   } catch {
@@ -222,15 +254,24 @@ export function buildJadvalView(state: JadvalRoomState, memberId: string, now: n
     for (const w of puzzle.words) putWord(solution, w);
   }
 
+  /* ⚠️ ردیف‌های خام بانک حروفِ پاسخ را دارند — به کلاینت فقط الگوی سیاه/سفید می‌رود */
+  const safeRows = puzzle.rows.map((row) => row.replace(/[^#]/g, "."));
+
+  /* سطح جدول برای نشان سربرگ — پیش‌فرض سخت */
+  const diff: JadvalDiff = puzzle.diff === "easy" || puzzle.diff === "pro" ? puzzle.diff : "hard";
+
   return {
     startedAtMs: state.startedAtMs,
     matchMs: state.matchMs,
     endsInMs: Math.max(0, state.startedAtMs + state.matchMs - now),
+    mode: state.sher ? "sher" : "classic",
     puzzle: {
       id: puzzle.id,
       title: puzzle.title,
       size: puzzle.size,
-      rows: puzzle.rows,
+      rows: safeRows,
+      diff,
+      ...(state.sher && puzzle.sherIntro ? { sherIntro: puzzle.sherIntro } : {}),
       words: puzzle.words.map((w) => ({
         i: w.i,
         r: w.r,
@@ -239,6 +280,7 @@ export function buildJadvalView(state: JadvalRoomState, memberId: string, now: n
         len: w.len,
         num: w.num,
         clue: w.clue,
+        ...(state.sher && w.sher ? { sher: w.sher } : {}),
       })),
     },
     myTeam: team,
