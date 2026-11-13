@@ -5,6 +5,7 @@ import { Apps } from "@/components/site/apps";
 import { GamesSection } from "@/components/site/games-section";
 import { BoxesSection } from "@/components/site/boxes-section";
 import { MotionSection } from "@/components/site/motion-section";
+import { RoadmapSection } from "@/components/site/roadmap-section";
 import { About } from "@/components/site/about";
 import { Contact } from "@/components/site/contact";
 import { SiteFooter } from "@/components/site/footer";
@@ -42,6 +43,7 @@ export default async function Home() {
             titleFa={settings.motionTitleFa}
             titleEn={settings.motionTitleEn}
           />
+          <RoadmapSection />
           <About content={content} aboutImageUrl={settings.aboutImageUrl} />
           <Contact contacts={settings} />
         </main>
