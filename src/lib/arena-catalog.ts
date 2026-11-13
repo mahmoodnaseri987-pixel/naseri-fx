@@ -35,8 +35,8 @@ export const ARENA_CATALOG_DEFS: Omit<CatalogGame, "enabled" | "sortOrder">[] = 
     kind: "room",
     titleFa: "چالش سرعتی",
     titleEn: "Speed Quiz",
-    descFa: "۱۰ سؤال؛ امتیاز هر پاسخ بسته به سرعت",
-    descEn: "10 questions; faster answers score more",
+    descFa: "۲۰ سؤال؛ امتیاز هر پاسخ بسته به سرعت",
+    descEn: "20 questions; faster answers score more",
     icon: "swords",
   },
   {
