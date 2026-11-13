@@ -6,10 +6,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  Ban,
   BookOpenText,
   Camera,
   Crown,
   Dices,
+  Film,
   Flame,
   Grid3x3,
   Image as ImageIcon,
@@ -20,6 +22,7 @@ import {
   Music,
   Plus,
   RefreshCw,
+  Shapes,
   Swords,
   Users,
   Zap,
@@ -37,6 +40,7 @@ import { JADVAL_GAME_SLUG } from "@/lib/jadval-shared";
 import { PIC_GAME_SLUG } from "@/lib/pic-shared";
 import { LUDO_GAME_SLUG, LUDO_MAX_PLAYERS } from "@/lib/ludo-shared";
 import { SHER_CATEGORIES, SHER_GAME_SLUG, type SherCategory } from "@/lib/sher-shared";
+import { SCENE_GAME_SLUG, SCENE_MODES, type SceneMode } from "@/lib/scene-shared";
 import type { ArenaGameConfigView, ArenaRoomSummary, MemberInfo } from "@/lib/types";
 
 /* کارت ویژهٔ «میدان آتش آفلاین» که از پنل هم قابل حذف است */
@@ -46,7 +50,7 @@ type LobbyGame = {
   slug: string;
   title: string;
   desc: string;
-  icon: "swords" | "zap" | "grid" | "image" | "dice" | "music";
+  icon: "swords" | "zap" | "grid" | "image" | "dice" | "music" | "shapes";
 };
 
 export function ArenaLobby({ member }: { member: MemberInfo }) {
@@ -66,17 +70,22 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
   const [ageGroup, setAgeGroup] = useState<AgeGroup>("adult");
   const [sherCategory, setSherCategory] = useState<SherCategory>("nostalgia"); // بخش آهنگ‌های «شعر یادت نره»
   const [sherMode, setSherMode] = useState(false); // جدول: حالت شرح‌در‌متن
+  const [sceneMode, setSceneMode] = useState<SceneMode>("classic"); // صحنه‌گردان: حالت بازی
 
   /* ظرفیت مجاز بازی انتخابی — منچ حداکثر ۴ نفر (چهار رنگ) */
   const capacityMax = gameSlug === LUDO_GAME_SLUG ? LUDO_MAX_PLAYERS : MAX_PLAYERS;
   const isJadval = gameSlug === JADVAL_GAME_SLUG;
+  const isScene = gameSlug === SCENE_GAME_SLUG;
   useEffect(() => {
     if (playerCount > capacityMax) setPlayerCount(capacityMax);
   }, [capacityMax, playerCount]);
-  /* تغییر بازی — حالت شرح‌در‌متن فقط برای جدول است */
+  /* تغییر بازی — حالت‌های اختصاصی هر بازی فقط برای همان بازی می‌مانند */
   useEffect(() => {
     if (!isJadval) setSherMode(false);
   }, [isJadval]);
+  useEffect(() => {
+    if (!isScene) setSceneMode("classic");
+  }, [isScene]);
 
   const numFmt = useCallback(
     (n: number) => new Intl.NumberFormat(lang === "fa" ? "fa-IR" : "en-US").format(n),
@@ -133,6 +142,7 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
           ageGroup,
           ...(gameSlug === SHER_GAME_SLUG ? { sherCategory } : {}),
           jadvalSher: sherMode, // جدول: حالت شرح‌در‌متن
+          sceneMode, // صحنه‌گردان: کلاسیک / ۳کادری / حذفی‌ها
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -207,6 +217,7 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
       { slug: PIC_GAME_SLUG, title: a.gamePic, desc: a.gamePicDesc, icon: "image" },
       { slug: LUDO_GAME_SLUG, title: a.gameLudo, desc: a.gameLudoDesc, icon: "dice" },
       { slug: SHER_GAME_SLUG, title: a.gameSher, desc: a.gameSherDesc, icon: "music" },
+      { slug: SCENE_GAME_SLUG, title: a.gameScene, desc: a.gameSceneDesc, icon: "shapes" },
     ];
     if (!gamesCfg) return all;
     const order = new Map(gamesCfg.map((g, i) => [g.slug, i]));
@@ -342,6 +353,8 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
                       <Dices className="h-4 w-4" aria-hidden="true" />
                     ) : g.icon === "music" ? (
                       <Music className="h-4 w-4" aria-hidden="true" />
+                    ) : g.icon === "shapes" ? (
+                      <Shapes className="h-4 w-4" aria-hidden="true" />
                     ) : (
                       <Swords className="h-4 w-4" aria-hidden="true" />
                     )}
@@ -433,6 +446,39 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
                 </div>
                 <p className="mt-2 text-[11px] leading-5 text-zinc-500">
                   {sherMode ? a.modeSherHint : a.modeClassicHint}
+                </p>
+              </div>
+            )}
+
+            {/* حالت بازی صحنه‌گردان — کلاسیک، ۳کادری، حذفی‌ها */}
+            {isScene && (
+              <div className="mt-4">
+                <p className="text-xs font-bold text-zinc-400">{a.scene.modeLabel}</p>
+                <div className="mt-2 grid grid-cols-3 gap-1.5" role="radiogroup" aria-label={a.scene.modeLabel}>
+                  {SCENE_MODES.map((m) => {
+                    const active = m === sceneMode;
+                    const Icon = m === "frames" ? Film : m === "limited" ? Ban : LayoutGrid;
+                    return (
+                      <button
+                        key={m}
+                        type="button"
+                        role="radio"
+                        aria-checked={active}
+                        onClick={() => setSceneMode(m)}
+                        className={`flex flex-col items-center gap-1 rounded-xl border px-2 py-2.5 text-xs font-bold transition-colors ${
+                          active
+                            ? "border-fuchsia-500/60 bg-fuchsia-500/10 text-fuchsia-200"
+                            : "border-zinc-800 bg-zinc-950/40 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
+                        }`}
+                      >
+                        <Icon className="h-4 w-4" aria-hidden="true" />
+                        {m === "frames" ? a.scene.modeFrames : m === "limited" ? a.scene.modeLimited : a.scene.modeClassic}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="mt-2 text-[11px] leading-5 text-zinc-500">
+                  {sceneMode === "frames" ? a.scene.modeFramesHint : sceneMode === "limited" ? a.scene.modeLimitedHint : a.scene.modeClassicHint}
                 </p>
               </div>
             )}

@@ -32,12 +32,14 @@ import { JadvalClient } from "@/components/site/jadval-client";
 import { PicClient } from "@/components/site/pic-client";
 import { LudoClient } from "@/components/site/ludo-client";
 import { SherClient } from "@/components/site/sher-client";
+import { SceneClient } from "@/components/site/scene-client";
 import { subscribeStream } from "@/lib/realtime";
 import { ARENA_GAME_SLUG, ANSWER_MS, BOT_GAMES, REVEAL_MS, CATEGORY_LABELS, isBotId, type ArenaCategory } from "@/lib/arena-game";
 import { JADVAL_GAME_SLUG } from "@/lib/jadval-shared";
 import { PIC_GAME_SLUG } from "@/lib/pic-shared";
 import { LUDO_GAME_SLUG } from "@/lib/ludo-shared";
 import { SHER_GAME_SLUG, SHER_MODES, sherModesFor, type SherMode } from "@/lib/sher-shared";
+import { SCENE_GAME_SLUG } from "@/lib/scene-shared";
 import { sfxAmbientStart, sfxAmbientStop, sfxIsMuted, sfxLose, sfxToggleMuted, sfxWin } from "@/lib/arena-sfx";
 import type { ArenaStateResponse } from "@/lib/types";
 
@@ -574,6 +576,11 @@ export function RoomClient({ code }: { code: string }) {
             {a.sher.lobbyHint}
           </p>
         )}
+        {st.room.gameSlug === SCENE_GAME_SLUG && (
+          <p className="mt-8 rounded-2xl border border-fuchsia-500/30 bg-fuchsia-500/[0.06] px-4 py-3.5 text-center text-xs leading-6 text-zinc-300">
+            {a.scene.lobbyHint}
+          </p>
+        )}
         <section className="mt-6 h-[460px] overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/60">
           <ChatPanel scope={code} className="h-full" />
         </section>
@@ -587,6 +594,16 @@ export function RoomClient({ code }: { code: string }) {
       <>
         {chatFloat}
         <SherClient st={st} offsetMs={st.now - fetchedAt} />
+      </>
+    );
+  }
+
+  /* «صحنه‌گردان» — صحنه، حدس‌ها و نتایج داخل خود بازی رندر می‌شود */
+  if (st.room.gameSlug === SCENE_GAME_SLUG && st.scene) {
+    return (
+      <>
+        {chatFloat}
+        <SceneClient st={st} offsetMs={st.now - fetchedAt} />
       </>
     );
   }

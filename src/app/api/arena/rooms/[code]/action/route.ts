@@ -81,7 +81,21 @@ import {
   sherAnswer,
   sherTick,
 } from "@/lib/sher-engine";
-import { invalidateRoomSnapshot, parseState, persistFireState, persistLudoState, persistSherState, settleLudo } from "@/lib/arena-live";
+import {
+  SCENE_GAME_SLUG,
+  SCENE_MODES,
+  sceneLobbyMode,
+  type SceneMode,
+} from "@/lib/scene-shared";
+import {
+  createSceneState,
+  parseSceneState,
+  sceneGuess,
+  sceneSetBoard,
+  sceneTick,
+  sceneValidateBoard,
+} from "@/lib/scene-engine";
+import { invalidateRoomSnapshot, parseState, persistFireState, persistLudoState, persistSceneState, persistSherState, settleLudo } from "@/lib/arena-live";
 
 /** خواندن امن فرادادهٔ اتاق (مثل گروه سنی) از JSON خام state — قبل از شروع بازی */
 function safeStateMeta(raw: string): { ageGroup?: unknown; jadvalSher?: unknown } {
@@ -1087,6 +1101,128 @@ export async function POST(
     /* ready / leave / again → منطق مشترک پایین اجرا می‌شود */
   }
 
+  /* ================================================================
+     اکشن‌های اختصاصی «صحنه‌گردان» — پانتومیم کارتی بدون دوربین
+     ================================================================ */
+  if (room.gameSlug === SCENE_GAME_SLUG) {
+    /* --- شروع مسابقه (میزبان، حداقل ۲ نفر، همه آماده) ---
+       حالت از بدنهٔ درخواست یا انتخاب لابی (الگوی sher) — کلاسیک پیش‌فرض */
+    if (type === "start") {
+      if (room.status !== "lobby") {
+        return NextResponse.json({ error: "conflict" }, { status: 409 });
+      }
+      if (room.hostId !== me.memberId) {
+        return NextResponse.json({ error: "not host" }, { status: 403 });
+      }
+      if (room.members.length < MIN_PLAYERS) {
+        return NextResponse.json({ error: "need players" }, { status: 409 });
+      }
+      if (!room.members.every((m) => m.isReady)) {
+        return NextResponse.json({ error: "not ready" }, { status: 409 });
+      }
+      const requested = typeof body.mode === "string" ? body.mode : "";
+      const lobby = sceneLobbyMode(room.state);
+      const mode: SceneMode =
+        (SCENE_MODES as readonly string[]).includes(requested)
+          ? (requested as SceneMode)
+          : (lobby ?? "classic");
+      const scState = createSceneState(
+        mode,
+        room.members.map((m) => ({ id: m.memberId, name: m.name })),
+        roomAgeGroup(room),
+        Date.now(),
+      );
+      if (!scState) {
+        return NextResponse.json({ error: "need players" }, { status: 409 });
+      }
+      await db.$transaction([
+        db.room.update({
+          where: { id: room.id },
+          data: { status: "playing", state: JSON.stringify(scState) },
+        }),
+        db.roomMember.updateMany({
+          where: { roomId: room.id },
+          data: { isReady: false, fireInput: "{}" },
+        }),
+        db.chatMessage.create({
+          data: {
+            scope: room.code,
+            memberId: me.memberId,
+            name: me.name,
+            content: "مسابقهٔ «صحنه‌گردان» شروع شد — کارگردان صحنه را با کارت می‌چیند، بقیه حدس بزنید!",
+            kind: "system",
+          },
+        }),
+      ]);
+      invalidateRoomSnapshot(room.code); // مسابقه بلافاصله برای همه بالا بیاید
+      return NextResponse.json({ ok: true });
+    }
+
+    /* --- ثبت صحنهٔ کارگردان — فقط خودش، فقط در فاز چیدمان --- */
+    if (type === "scene_set") {
+      if (room.status !== "playing") {
+        return NextResponse.json({ error: "conflict" }, { status: 409 });
+      }
+      const scState = parseSceneState(room.state);
+      if (!scState) return NextResponse.json({ error: "gone" }, { status: 404 });
+      sceneTick(scState, { now: Date.now() });
+      const board = sceneValidateBoard(
+        body.board,
+        scState.mode,
+        scState.rounds[scState.round - 1]?.toolbox ?? null,
+      );
+      const outcome = sceneSetBoard(scState, me.memberId, board);
+      if (!outcome.ok) {
+        return NextResponse.json({ error: outcome.reason ?? "conflict" }, { status: 409 });
+      }
+      const persisted = await persistSceneState(room.id, scState);
+      invalidateRoomSnapshot(room.code); // صحنهٔ تازه برای همهٔ تماشاچی‌ها
+      if (!persisted) {
+        return NextResponse.json({ error: "conflict" }, { status: 409 });
+      }
+      return NextResponse.json({ ok: true });
+    }
+
+    /* --- ثبت حدس — هر غیرکارگردان؛ درست‌ها امتیاز می‌گیرند --- */
+    if (type === "scene_guess") {
+      if (room.status !== "playing") {
+        return NextResponse.json({ error: "conflict" }, { status: 409 });
+      }
+      const scState = parseSceneState(room.state);
+      if (!scState) return NextResponse.json({ error: "gone" }, { status: 404 });
+      sceneTick(scState, { now: Date.now() });
+      const text = typeof body.text === "string" ? body.text : "";
+      const outcome = sceneGuess(scState, me.memberId, me.name, text, Date.now());
+      if (!outcome.ok) {
+        return NextResponse.json({ error: outcome.reason ?? "conflict" }, { status: 409 });
+      }
+      const persisted = await persistSceneState(room.id, scState);
+      invalidateRoomSnapshot(room.code); // فید حدس‌ها و امتیازها بلافاصله تازه شود
+      if (!persisted) {
+        return NextResponse.json({ error: "conflict" }, { status: 409 });
+      }
+      if (outcome.correct) {
+        try {
+          await db.chatMessage.create({
+            data: {
+              scope: room.code,
+              memberId: me.memberId,
+              name: me.name,
+              content: `${me.name} صحنه را حدس زد! ✓ (+${outcome.points} امتیاز)`,
+              kind: "system",
+            },
+          });
+          invalidateRoomSnapshot(room.code);
+        } catch {
+          /* چت حیاتی نیست */
+        }
+      }
+      return NextResponse.json({ ok: true, correct: outcome.correct, points: outcome.points ?? 0 });
+    }
+
+    /* ready / leave / again → منطق مشترک پایین اجرا می‌شود */
+  }
+
   /* --- پرکردن صندلی‌های خالی با ربات (میزبان، فقط لابی، فقط بازی‌های سؤالی) ---
      میزبان بین «انتظار برای تکمیل بازیکنان» و «شروع با ربات» آزاد است؛
      هر ربات بلافاصله آماده است و در مسابقه سؤالی/جدول/حدس تصویر واقعاً بازی می‌کند. */
@@ -1283,6 +1419,14 @@ export async function POST(
         };
         if (sherMode) meta.sherMode = sherMode;
         if (sherCategory) meta.sherCategory = sherCategory;
+        return JSON.stringify(meta);
+      }
+      /* صحنه‌گردان: حالت انتخابی میزبان برای «مسابقه دوباره» حفظ می‌شود */
+      if (room.gameSlug === SCENE_GAME_SLUG) {
+        const past = parseSceneState(room.state);
+        const sceneMode = sceneLobbyMode(room.state) ?? past?.mode ?? null;
+        const meta: { ageGroup: string; sceneMode?: SceneMode } = { ageGroup: roomAgeGroup(room) };
+        if (sceneMode) meta.sceneMode = sceneMode;
         return JSON.stringify(meta);
       }
       /* منچ: بازی تیمی و گروه سنی برای مسابقهٔ بعدی هم می‌ماند */

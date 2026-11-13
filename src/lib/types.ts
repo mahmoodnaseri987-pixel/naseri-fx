@@ -125,7 +125,7 @@ export type AdminArenaGame = {
   titleEn: string;
   descFa: string;
   descEn: string;
-  icon: "swords" | "zap" | "grid" | "image" | "flame" | "dice";
+  icon: "swords" | "zap" | "grid" | "image" | "flame" | "dice" | "music" | "shapes";
   enabled: boolean;
   activeRooms: number;
 };
@@ -236,6 +236,9 @@ export type LudoViewType = import("@/lib/ludo-shared").LudoView;
 /* بازی «شعر یادت نره» — جواب دور در فازهای listen/guess مخفی است */
 export type SherViewType = import("@/lib/sher-shared").SherView;
 
+/* بازی «صحنه‌گردان» — واژهٔ مخفی فقط برای کارگردان دور در فاز چیدمان می‌آید */
+export type SceneViewType = import("@/lib/scene-shared").SceneView;
+
 export type ArenaStateResponse = {
   now: number;
   me: string;
@@ -257,6 +260,7 @@ export type ArenaStateResponse = {
   pic: PicViewType | null;
   ludo: LudoViewType | null;
   sher: SherViewType | null;
+  scene: SceneViewType | null;
 };
 
 /* ---------- چت (لابی عمومی و داخل اتاق) ---------- */

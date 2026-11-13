@@ -13,6 +13,8 @@ import { NABARD_GAME_SLUG } from "@/lib/nabard-engine";
 import { JADVAL_GAME_SLUG } from "@/lib/jadval-shared";
 import { PIC_GAME_SLUG } from "@/lib/pic-shared";
 import { LUDO_GAME_SLUG } from "@/lib/ludo-shared";
+import { SHER_GAME_SLUG } from "@/lib/sher-shared";
+import { SCENE_GAME_SLUG } from "@/lib/scene-shared";
 
 export type CatalogGameKind = "room" | "banner"; // banner = کارت ویژهٔ لابی (آتش آفلاین)
 
@@ -23,7 +25,7 @@ export type CatalogGame = {
   titleEn: string;
   descFa: string;
   descEn: string;
-  icon: "swords" | "zap" | "grid" | "image" | "flame" | "dice";
+  icon: "swords" | "zap" | "grid" | "image" | "flame" | "dice" | "music" | "shapes";
   enabled: boolean;
   sortOrder: number;
 };
@@ -74,6 +76,24 @@ export const ARENA_CATALOG_DEFS: Omit<CatalogGame, "enabled" | "sortOrder">[] = 
     descFa: "منچ کلاسیک ۲ تا ۴ نفره — ورود با ۶، زدن مهره و ۵ خانهٔ سورپرایز",
     descEn: "Classic Ludo for 2-4 — enter with a 6, captures, 5 surprise cells",
     icon: "dice",
+  },
+  {
+    slug: SHER_GAME_SLUG,
+    kind: "room",
+    titleFa: "شعر یادت نره",
+    titleEn: "Finish the Song",
+    descFa: "کلیپ آهنگ قطع می‌شود — بیت بعدی را سریع‌تر از بقیه حدس بزن",
+    descEn: "The clip cuts mid-song — guess the next line before the others",
+    icon: "music",
+  },
+  {
+    slug: SCENE_GAME_SLUG,
+    kind: "room",
+    titleFa: "صحنه‌گردان",
+    titleEn: "Scene Director",
+    descFa: "پانتومیم کارتی بدون دوربین — با کارت‌ها صحنه بچین و بگذار حدس بزنند",
+    descEn: "Card-based pantomime, no camera — build the scene, let them guess",
+    icon: "shapes",
   },
   {
     slug: "fire-offline",
