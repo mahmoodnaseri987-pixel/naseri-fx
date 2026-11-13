@@ -40,7 +40,7 @@ import { JADVAL_GAME_SLUG } from "@/lib/jadval-shared";
 import { PIC_GAME_SLUG } from "@/lib/pic-shared";
 import { LUDO_GAME_SLUG, LUDO_MAX_PLAYERS } from "@/lib/ludo-shared";
 import { SHER_CATEGORIES, SHER_GAME_SLUG, type SherCategory } from "@/lib/sher-shared";
-import { SCENE_GAME_SLUG, SCENE_MODES, type SceneMode } from "@/lib/scene-shared";
+import { SCENE_DIFF_FIRST_POINTS, SCENE_DIFFS, SCENE_GAME_SLUG, SCENE_MODES, type SceneDifficulty, type SceneMode } from "@/lib/scene-shared";
 import type { ArenaGameConfigView, ArenaRoomSummary, MemberInfo } from "@/lib/types";
 
 /* کارت ویژهٔ «میدان آتش آفلاین» که از پنل هم قابل حذف است */
@@ -71,6 +71,7 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
   const [sherCategory, setSherCategory] = useState<SherCategory>("nostalgia"); // بخش آهنگ‌های «شعر یادت نره»
   const [sherMode, setSherMode] = useState(false); // جدول: حالت شرح‌در‌متن
   const [sceneMode, setSceneMode] = useState<SceneMode>("classic"); // صحنه‌گردان: حالت بازی
+  const [sceneDifficulty, setSceneDifficulty] = useState<SceneDifficulty>("easy"); // صحنه‌گردان: سختی و امتیاز
 
   /* ظرفیت مجاز بازی انتخابی — منچ حداکثر ۴ نفر (چهار رنگ) */
   const capacityMax = gameSlug === LUDO_GAME_SLUG ? LUDO_MAX_PLAYERS : MAX_PLAYERS;
@@ -84,7 +85,10 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
     if (!isJadval) setSherMode(false);
   }, [isJadval]);
   useEffect(() => {
-    if (!isScene) setSceneMode("classic");
+    if (!isScene) {
+      setSceneMode("classic");
+      setSceneDifficulty("easy");
+    }
   }, [isScene]);
 
   const numFmt = useCallback(
@@ -143,6 +147,7 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
           ...(gameSlug === SHER_GAME_SLUG ? { sherCategory } : {}),
           jadvalSher: sherMode, // جدول: حالت شرح‌در‌متن
           sceneMode, // صحنه‌گردان: کلاسیک / ۳کادری / حذفی‌ها
+          sceneDifficulty, // صحنه‌گردان: سختی و امتیاز حدس
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -479,6 +484,40 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
                 </div>
                 <p className="mt-2 text-[11px] leading-5 text-zinc-500">
                   {sceneMode === "frames" ? a.scene.modeFramesHint : sceneMode === "limited" ? a.scene.modeLimitedHint : a.scene.modeClassicHint}
+                </p>
+              </div>
+            )}
+
+            {/* سختی صحنه‌گردان — به انتخاب گروه؛ ارزش امتیاز حدس را تعیین می‌کند */}
+            {isScene && (
+              <div className="mt-4">
+                <p className="text-xs font-bold text-zinc-400">{a.scene.diffLabel}</p>
+                <div className="mt-2 grid grid-cols-4 gap-1.5" role="radiogroup" aria-label={a.scene.diffLabel}>
+                  {SCENE_DIFFS.map((d) => {
+                    const active = d === sceneDifficulty;
+                    return (
+                      <button
+                        key={d}
+                        type="button"
+                        role="radio"
+                        aria-checked={active}
+                        onClick={() => setSceneDifficulty(d)}
+                        className={`flex flex-col items-center gap-0.5 rounded-xl border px-1.5 py-2 text-[11px] font-bold transition-colors ${
+                          active
+                            ? "border-amber-500/60 bg-amber-500/10 text-amber-200"
+                            : "border-zinc-800 bg-zinc-950/40 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
+                        }`}
+                      >
+                        <span>{d === "easiest" ? a.scene.diffEasiest : d === "easy" ? a.scene.diffEasy : d === "hard" ? a.scene.diffHard : a.scene.diffHardest}</span>
+                        <span className={`text-[10px] font-black ${active ? "text-amber-300" : "text-zinc-500"}`} dir="ltr">
+                          {numFmt(SCENE_DIFF_FIRST_POINTS[d])}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="mt-2 text-[11px] leading-5 text-zinc-500">
+                  {sceneDifficulty === "hardest" ? a.scene.diffHardestHint : sceneDifficulty === "hard" ? a.scene.diffHardHint : sceneDifficulty === "easiest" ? a.scene.diffEasiestHint : a.scene.diffEasyHint}
                 </p>
               </div>
             )}

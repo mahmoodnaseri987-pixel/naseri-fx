@@ -41,6 +41,35 @@ export const SCENE_FRAME_TITLES: Record<SceneMode, readonly string[]> = {
   limited: ["صحنه"],
 };
 
+/* ---------- سطح سختی — به انتخاب گروه بازی‌کننده ----------
+   سختی هم ارزش امتیاز حدس را تعیین می‌کند هم استخر واژه‌ها را:
+   خیلی آسان = واژه‌های ساده و مستقیم؛ خیلی سخت = فقط ضرب‌المثل‌های انتزاعی. */
+export const SCENE_DIFFS = ["easiest", "easy", "hard", "hardest"] as const;
+export type SceneDifficulty = (typeof SCENE_DIFFS)[number];
+
+export const SCENE_DIFF_LABELS: Record<SceneDifficulty, { fa: string; en: string }> = {
+  easiest: { fa: "خیلی آسان", en: "Very Easy" },
+  easy: { fa: "آسان", en: "Easy" },
+  hard: { fa: "سخت", en: "Hard" },
+  hardest: { fa: "خیلی سخت", en: "Very Hard" },
+};
+
+/** امتیاز حدس درست اول در هر سختی — حدس‌های بعدی نصفش می‌شود */
+export const SCENE_DIFF_FIRST_POINTS: Record<SceneDifficulty, number> = {
+  easiest: 5,
+  easy: 10,
+  hard: 15,
+  hardest: 20,
+};
+
+/** استخر دستهٔ واژه‌ها در هر سختی — با گروه سنی هم تقاطع داده می‌شود */
+export const SCENE_DIFF_CATS: Record<SceneDifficulty, readonly string[]> = {
+  easiest: ["easy"],
+  easy: ["easy", "phrase"],
+  hard: ["phrase", "proverb"],
+  hardest: ["proverb"],
+};
+
 /* ---------- کاتالوگ کارت‌ها — ایموجی فرهنگ‌محور، بدون واژهٔ مخفی ---------- */
 
 export type SceneCardCat = "actor" | "obj" | "feel" | "shape" | "bg";
@@ -101,6 +130,14 @@ export const SCENE_CARDS: readonly SceneCardDef[] = [
   { k: "o.cake", e: "🎂", fa: "کیک", en: "Cake", cat: "obj" },
   { k: "o.flower", e: "🌸", fa: "گل", en: "Flower", cat: "obj" },
   { k: "o.tree", e: "🌳", fa: "درخت", en: "Tree", cat: "obj" },
+  { k: "o.mountain", e: "⛰️", fa: "کوه", en: "Mountain", cat: "obj" },
+  { k: "o.bowl", e: "🥣", fa: "هاون", en: "Mortar", cat: "obj" },
+  { k: "o.shoe", e: "👟", fa: "کفش", en: "Shoe", cat: "obj" },
+  { k: "o.hands", e: "🤝", fa: "دست‌ها", en: "Hands", cat: "obj" },
+  { k: "o.snake", e: "🐍", fa: "مار", en: "Snake", cat: "obj" },
+  { k: "o.axe", e: "🪓", fa: "تبر", en: "Axe", cat: "obj" },
+  { k: "o.rope", e: "🪢", fa: "طناب", en: "Rope", cat: "obj" },
+  { k: "o.egg", e: "🥚", fa: "تخم", en: "Egg", cat: "obj" },
   /* حس و حرکت */
   { k: "e.arrow", e: "➡️", fa: "فلش", en: "Arrow", cat: "feel" },
   { k: "e.speed", e: "💨", fa: "سرعت", en: "Speed", cat: "feel" },
@@ -192,6 +229,7 @@ export type SceneRound = {
   guesses: SceneGuess[]; // فید حدس‌ها (همه می‌بینند)
   scorers: SceneScorer[]; // حدس‌زن‌های درست این دور
   toolbox: string[] | null; // حذفی‌ها: کلیدهای مجاز؛ null یعنی همه
+  kit: string[] | null; // کارت‌های پیشنهادیِ هماهنگ با معنی واژه — فقط کارگردان می‌بیند
 };
 
 export type ScenePlayer = { id: string; name: string };
@@ -210,6 +248,7 @@ export type SceneRoomState = {
   startedAtMs: number;
   seq: number; // گارد نوشتن — فقط رو به جلو
   mode: SceneMode;
+  difficulty: SceneDifficulty;
   players: ScenePlayer[];
   round: number; // ۱ تا totalRounds
   totalRounds: number;
@@ -227,6 +266,7 @@ export type SceneView = {
   now: number;
   seq: number;
   mode: SceneMode;
+  difficulty: SceneDifficulty;
   round: number;
   totalRounds: number;
   phase: "build" | "reveal" | "done";
@@ -236,19 +276,21 @@ export type SceneView = {
   directorName: string;
   isMyTurn: boolean; // کارگردانِ دور جاری من هستم
   word: string | null; // فقط کارگردان در فاز build یا همه در فاز reveal
+  kit: string[] | null; // کارت‌های پیشنهادی — هم‌زمان با واژه گشوده می‌شود
   toolbox: string[] | null; // سقف ابزار دور جاری — فقط برای کارگردان معنا دارد
   frameCount: number; // ۱ یا ۳
   board: SceneBoard | null;
   history: SceneBoard[] | null; // فقط در reveal/done — برای پخش تایم‌لپس
   cardCount: number; // تعداد کارت‌های به‌کاررفتهٔ دور جاری
   maxCards: number; // سقف کارت دور جاری
+  firstPoints: number; // امتیاز حدس اول در سختی جاری
   guesses: SceneGuess[];
   solvedCount: number;
   scores: Record<string, number>;
   finished: boolean;
   result: SceneResult | null;
   lobbyHint?: boolean;
-}
+};
 
 /* خواندن امن حالت انتخابی میزبان از JSON خام state لابی — الگوی sherLobbyMode */
 export function sceneLobbyMode(raw: string): SceneMode | null {
@@ -261,4 +303,17 @@ export function sceneLobbyMode(raw: string): SceneMode | null {
     /* خراب — پیش‌فرض */
   }
   return null;
-};
+}
+
+/* خواندن امن سطح سختی انتخابی میزبان از JSON خام state لابی */
+export function sceneLobbyDifficulty(raw: string): SceneDifficulty | null {
+  try {
+    const d = JSON.parse(raw) as { sceneDifficulty?: unknown };
+    if (typeof d.sceneDifficulty === "string" && (SCENE_DIFFS as readonly string[]).includes(d.sceneDifficulty)) {
+      return d.sceneDifficulty as SceneDifficulty;
+    }
+  } catch {
+    /* خراب — پیش‌فرض */
+  }
+  return null;
+}

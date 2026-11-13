@@ -82,9 +82,12 @@ import {
   sherTick,
 } from "@/lib/sher-engine";
 import {
+  SCENE_DIFFS,
   SCENE_GAME_SLUG,
   SCENE_MODES,
+  sceneLobbyDifficulty,
   sceneLobbyMode,
+  type SceneDifficulty,
   type SceneMode,
 } from "@/lib/scene-shared";
 import {
@@ -1126,8 +1129,16 @@ export async function POST(
         (SCENE_MODES as readonly string[]).includes(requested)
           ? (requested as SceneMode)
           : (lobby ?? "classic");
+      /* سختی به انتخاب گروه — بدنهٔ درخواست یا انتخاب لابی؛ پیش‌فرض آسان (۱۰ امتیاز) */
+      const requestedDiff = typeof body.difficulty === "string" ? body.difficulty : "";
+      const lobbyDiff = sceneLobbyDifficulty(room.state);
+      const difficulty: SceneDifficulty =
+        (SCENE_DIFFS as readonly string[]).includes(requestedDiff)
+          ? (requestedDiff as SceneDifficulty)
+          : (lobbyDiff ?? "easy");
       const scState = createSceneState(
         mode,
+        difficulty,
         room.members.map((m) => ({ id: m.memberId, name: m.name })),
         roomAgeGroup(room),
         Date.now(),
@@ -1421,12 +1432,14 @@ export async function POST(
         if (sherCategory) meta.sherCategory = sherCategory;
         return JSON.stringify(meta);
       }
-      /* صحنه‌گردان: حالت انتخابی میزبان برای «مسابقه دوباره» حفظ می‌شود */
+      /* صحنه‌گردان: حالت و سختی انتخابی میزبان برای «مسابقه دوباره» حفظ می‌شود */
       if (room.gameSlug === SCENE_GAME_SLUG) {
         const past = parseSceneState(room.state);
         const sceneMode = sceneLobbyMode(room.state) ?? past?.mode ?? null;
-        const meta: { ageGroup: string; sceneMode?: SceneMode } = { ageGroup: roomAgeGroup(room) };
+        const sceneDifficulty = sceneLobbyDifficulty(room.state) ?? past?.difficulty ?? null;
+        const meta: { ageGroup: string; sceneMode?: SceneMode; sceneDifficulty?: SceneDifficulty } = { ageGroup: roomAgeGroup(room) };
         if (sceneMode) meta.sceneMode = sceneMode;
+        if (sceneDifficulty) meta.sceneDifficulty = sceneDifficulty;
         return JSON.stringify(meta);
       }
       /* منچ: بازی تیمی و گروه سنی برای مسابقهٔ بعدی هم می‌ماند */

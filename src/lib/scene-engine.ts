@@ -7,7 +7,7 @@
    ماژول فقط در مسیرهای سرور ایمپورت می‌شود.
    ================================================================ */
 
-import { SCENE_BUILD_MS, SCENE_BUILD_MS_FRAMES, SCENE_HISTORY_CAP, SCENE_LIMITED_TOOLBOX, SCENE_MAX_CARDS, SCENE_MAX_CARDS_PER_FRAME, SCENE_MAX_ROUNDS, SCENE_MINIMALIST_CARDS, SCENE_POINTS_DIRECTOR, SCENE_POINTS_FIRST, SCENE_POINTS_LATER, SCENE_POINTS_MINIMALIST, SCENE_REVEAL_MS, SCENE_START_DELAY_MS, SCENE_CARD_MAP, SCENE_CARDS, type SceneBoard, type ScenePlaced, type SceneResult, type SceneRoomState, type SceneView, type SceneMode } from "@/lib/scene-shared";
+import { SCENE_BUILD_MS, SCENE_BUILD_MS_FRAMES, SCENE_DIFF_CATS, SCENE_DIFF_FIRST_POINTS, SCENE_HISTORY_CAP, SCENE_LIMITED_TOOLBOX, SCENE_MAX_CARDS, SCENE_MAX_CARDS_PER_FRAME, SCENE_MAX_ROUNDS, SCENE_MINIMALIST_CARDS, SCENE_POINTS_DIRECTOR, SCENE_POINTS_MINIMALIST, SCENE_REVEAL_MS, SCENE_START_DELAY_MS, SCENE_CARD_MAP, SCENE_CARDS, type SceneBoard, type SceneDifficulty, type ScenePlaced, type SceneResult, type SceneRoomState, type SceneView, type SceneMode } from "@/lib/scene-shared";
 import type { AgeGroup } from "@/lib/arena-game";
 import { isBotId } from "@/lib/arena-registry";
 import { sherFuzzyMatch } from "@/lib/sher-shared";
@@ -27,12 +27,78 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
-/** دستهٔ واژه متناسب با گروه سنی + حالت — سه‌کادری روایت می‌خواهد: ضرب‌المثل و موقعیت */
-function wordPool(age: AgeGroup, mode: SceneMode): string[] {
-  let cats: string[];
-  if (age === "kid") cats = ["easy"];
-  else if (age === "pro") cats = ["easy", "phrase", "proverb"];
-  else cats = ["easy", "phrase"];
+/* ---------- کیت کارت‌ها — برای هر ضرب‌المثل/موقعیت، کارت‌های هماهنگ با معنی ----------
+   خواستهٔ طرح: کارگردان نباید برای «کوه به کوه نمی‌رسد» بی‌کارتِ کوه بماند.
+   کیت = کارت‌های پیشنهادی معنی‌محور که همیشه در دسترس‌اند و در جعبه ابزار
+   بالای بقیه پین می‌شوند؛ در «حذفی‌ها» هم به جعبه تصادفی اضافه می‌شوند. */
+const WORD_KITS: Record<string, string[]> = {
+  /* ضرب‌المثل‌ها — کارت متناسب با معنی */
+  "کوه به کوه نمی‌رسد": ["o.mountain", "o.apple", "e.x", "a.man", "e.check"],
+  "آب در هاون کوبیدن": ["o.bowl", "o.water", "a.man", "e.wow"],
+  "دل به دریا زدن": ["a.man", "o.water", "e.heart", "bg.sea"],
+  "دست به دست کردن": ["o.hands", "a.man", "a.kid", "e.check"],
+  "پا در یک کفش کردن": ["o.shoe", "a.man", "a.woman", "e.check"],
+  "سروکله زدن": ["a.man", "e.talk", "e.question", "e.wow"],
+  "آب از سرش پریدن": ["a.man", "o.water", "e.wow", "e.dizzy"],
+  "دلش آب شد": ["e.heart", "o.water", "e.happy", "e.think"],
+  "سروته کردن": ["s.line", "s.circle", "a.man", "e.dizzy"],
+  "خروس‌جنگی کردن": ["a.chicken", "e.angry", "e.wow", "e.speed"],
+  "شانه خالی کردن": ["o.basket", "a.man", "e.x", "e.sweat"],
+  "جوجه‌ها را آخر پاییز می‌شمارند": ["o.egg", "a.chicken", "e.cold", "o.clock"],
+  "از پشت کوه درآمدن": ["o.mountain", "a.man", "e.wow", "bg.mountain"],
+  "مار گزیده از ریسمان می‌ترسد": ["o.snake", "o.rope", "a.man", "e.scared"],
+  "تیشه به ریشه زدن": ["o.axe", "o.tree", "e.angry", "e.x"],
+  "از آب گل‌آلود ماهی گرفتن": ["o.water", "a.fish", "a.man", "e.check"],
+  "دست رو دست نگذاشتن": ["o.hands", "a.man", "e.check", "e.wow"],
+  "آب پاکی ریختن": ["o.water", "e.check", "a.man", "s.circle"],
+  "از پا افتادن": ["a.man", "e.sweat", "e.sleep", "s.line"],
+  "زیر بار رفتن": ["o.basket", "a.man", "e.sweat", "e.check"],
+  "از خجالت آب شدن": ["a.man", "o.water", "e.sweat", "e.cry"],
+  "باد در غوزه انداختن": ["e.speed", "e.star", "e.wow", "e.x"],
+  "کار از کار گذشت": ["s.line", "e.x", "e.question", "a.man"],
+  "چراغ را کور کردن": ["o.lamp", "e.x", "e.think", "a.man"],
+  "پای در میانه گذاشت": ["a.man", "s.line", "e.x", "e.question"],
+  /* موقعیت‌های پرتکرار — کارت‌های صحنهٔ کلاسیک */
+  "پدربزرگ سرما خورده": ["a.grandpa", "e.cold", "o.bed", "o.medicine"],
+  "گربه روی درخت مانده": ["a.cat", "o.tree", "e.scared", "e.wow"],
+  "بچه در باران دوید": ["a.kid", "o.umbrella", "e.speed", "bg.rain"],
+  "خانواده دور سماور جمع شدند": ["a.grandpa", "a.grandma", "a.kid", "o.samovar", "e.happy"],
+  "ماشین وسط جاده خوابید": ["o.car", "e.x", "e.sleep", "bg.street"],
+  "مهمان ناخوانده رسید": ["a.man", "o.door", "e.wow", "e.question"],
+  "گم شده در جنگل": ["a.man", "e.question", "e.cry", "bg.forest"],
+  "شاگرد سر کلاس خوابش برد": ["a.kid", "e.sleep", "o.book", "e.think"],
+  "بچه به دکتر گفت نمی‌خواهم آمپول": ["a.kid", "o.medicine", "e.cry", "e.x", "bg.hospital"],
+  "پیرمرد در پارک نان به کبوترها داد": ["a.grandpa", "o.bread", "a.bird", "e.happy"],
+  "بچه در تاریکی از سایه ترسید": ["a.kid", "e.scared", "e.wow", "bg.night"],
+  "سگ چوب را آورد": ["a.dog", "s.line", "e.happy", "e.check"],
+  "بچه از خواب پرید": ["a.kid", "o.bed", "e.wow", "e.sleep"],
+  "دو دوست دعوای بی‌دلیلی کردند": ["a.man", "e.angry", "e.x", "e.talk"],
+  "پدر بچه را روی شانه‌ها برد": ["a.man", "a.kid", "e.happy", "e.check"],
+  "آشپزخانه شلوغ شب عید": ["o.food", "o.fire", "e.wow", "bg.kitchen"],
+};
+
+/** کیت امن واژه — فقط کلیدهای موجود در کاتالوگ (دفاع در برابر خطای تایپی) */
+function kitOf(word: string): string[] | null {
+  const kit = WORD_KITS[word]?.filter((k) => SCENE_CARD_MAP.has(k));
+  return kit && kit.length > 0 ? kit : null;
+}
+
+/** امتیاز حدس اول در سختی جاری — بعدی‌ها نصف */
+function firstPointsOf(difficulty: SceneDifficulty): number {
+  return SCENE_DIFF_FIRST_POINTS[difficulty] ?? SCENE_DIFF_FIRST_POINTS.easy;
+}
+
+function laterPointsOf(difficulty: SceneDifficulty): number {
+  return Math.max(1, Math.floor(firstPointsOf(difficulty) / 2));
+}
+
+/** دستهٔ واژه متناسب با سختی × گروه سنی × حالت — سه‌کادری روایت می‌خواهد */
+function wordPool(age: AgeGroup, difficulty: SceneDifficulty, mode: SceneMode): string[] {
+  /* گروه سنی محدودکنندهٔ محتوا: کودکان فقط واژه‌های ساده */
+  const ageCats: string[] = age === "kid" ? ["easy"] : age === "pro" ? ["easy", "phrase", "proverb"] : ["easy", "phrase", "proverb"];
+  const diffCats = SCENE_DIFF_CATS[difficulty] ?? SCENE_DIFF_CATS.easy;
+  const cats = ageCats.filter((c) => diffCats.includes(c));
+  if (cats.length === 0) cats.push(...diffCats); // تقاطع خالی → سختی حاکم است
   let pool = WORDS.filter((w) => cats.includes(w.c)).map((w) => w.t);
   if (mode === "frames") {
     const rich = WORDS.filter((w) => w.c === "proverb" || w.c === "phrase").map((w) => w.t);
@@ -63,13 +129,14 @@ function maxCardsOf(mode: SceneMode): number {
 /** کارگردان‌ها به‌ترتیب ورود می‌چرخند؛ واژه‌ها بی‌تکرار از بانک دسته‌محور */
 export function createSceneState(
   mode: SceneMode,
+  difficulty: SceneDifficulty,
   players: { id: string; name: string }[],
   age: AgeGroup,
   now: number,
 ): SceneRoomState | null {
   const clean = players.filter((p) => p.id && p.name);
   if (clean.length < 2) return null;
-  const pool = wordPool(age, mode);
+  const pool = wordPool(age, difficulty, mode);
   if (pool.length < 2) return null;
   const totalRounds = Math.min(SCENE_MAX_ROUNDS, clean.length);
   const words = shuffle(pool).slice(0, totalRounds);
@@ -84,13 +151,19 @@ export function createSceneState(
       guesses: [] as SceneRoomState["rounds"][number]["guesses"],
       scorers: [] as SceneRoomState["rounds"][number]["scorers"],
       toolbox: null as string[] | null,
+      kit: kitOf(word),
     };
   });
-  /* حذفی‌ها: جعبه‌ابزار تصادفی ۸ کارتی برای هر دور — پس‌زمینه‌ها همیشه آزادند */
+  /* حذفی‌ها: جعبه‌ابزار تصادفی ۸ کارتی برای هر دور — پس‌زمینه‌ها همیشه آزادند؛
+     کارت‌های کیت همیشه به جعبه اضافه می‌شوند تا معنی واژه قابل روایت بماند */
   if (mode === "limited") {
     const nonBg = shuffle(SCENE_CARDS.filter((c) => c.cat !== "bg").map((c) => c.k));
     for (const r of rounds) {
       r.toolbox = nonBg.splice(0, SCENE_LIMITED_TOOLBOX);
+      if (r.kit) {
+        const extra = r.kit.filter((k) => SCENE_CARD_MAP.get(k)?.cat !== "bg" && !r.toolbox!.includes(k));
+        r.toolbox = [...r.toolbox, ...extra];
+      }
     }
   }
   const scores: Record<string, number> = {};
@@ -102,6 +175,7 @@ export function createSceneState(
     startedAtMs: now + SCENE_START_DELAY_MS,
     seq: 1,
     mode,
+    difficulty,
     players: clean,
     round: 1,
     totalRounds,
@@ -221,8 +295,8 @@ export type SceneGuessOutcome = {
   reason?: "phase" | "unknown" | "director" | "already" | "bad-text";
 };
 
-/** حدس هر بازیکن در فاز build — درست‌ها امتیاز می‌گیرند (اول ۱۰، بعدی‌ها ۵)
-    و کارگردان به‌ازای هر حدس‌زن ۳ امتیاز. حدس نادرست هم به فید می‌رود. */
+/** حدس هر بازیکن در فاز build — درست‌ها امتیاز می‌گیرند (اول به‌اندازهٔ سختی،
+    بعدی‌ها نصف) و کارگردان به‌ازای هر حدس‌زن ۳ امتیاز. حدس نادرست هم به فید می‌رود. */
 export function sceneGuess(
   st: SceneRoomState,
   playerId: string,
@@ -246,13 +320,17 @@ export function sceneGuess(
   const correct = sherFuzzyMatch(clean, round.word);
   if (correct) {
     const first = round.scorers.length === 0;
-    const points = first ? SCENE_POINTS_FIRST : SCENE_POINTS_LATER;
+    const points = first ? firstPointsOf(st.difficulty) : laterPointsOf(st.difficulty);
     round.scorers.push({ id: playerId, name, points, atMs: now });
     st.scores[playerId] = (st.scores[playerId] ?? 0) + points;
     st.scores[round.directorId] = (st.scores[round.directorId] ?? 0) + SCENE_POINTS_DIRECTOR;
   }
   st.seq += 1;
-  return { ok: true, correct, points: correct ? (round.scorers.length === 1 ? SCENE_POINTS_FIRST : SCENE_POINTS_LATER) : 0 };
+  return {
+    ok: true,
+    correct,
+    points: correct ? (round.scorers.length === 1 ? firstPointsOf(st.difficulty) : laterPointsOf(st.difficulty)) : 0,
+  };
 }
 
 /* ---------- ربات‌ها — قطعی با hash32 ---------- */
@@ -269,15 +347,23 @@ function hash32(s: string): number {
 const BOT_PLACE_STEP_MS = 6_500; // ربات کارگردان هر ~۶٫۵ ثانیه یک کارت می‌گذارد
 const BOT_BG_STEP_MS = 1_800;
 
-/** طرح کارگردانِ ربات — تعداد و کلیدهای کارت‌ها قطعی از hash */
+/** طرح کارگردانِ ربات — اول کارت‌های کیت (هماهنگ با معنی واژه)، بعد تصادفی */
 function botPlanKeys(botId: string, st: SceneRoomState): string[] {
   const round = st.rounds[st.round - 1];
   const pool = round.toolbox ?? SCENE_CARDS.filter((c) => c.cat !== "bg").map((c) => c.k);
   const h = hash32(`sc-plan:${botId}:${st.round}:${st.startedAtMs}`);
   const want = Math.min(maxCardsOf(st.mode), 3 + (h % 5));
   const picks: string[] = [];
-  for (let i = 0; i < want; i++) {
-    picks.push(pool[hash32(`sc-pick:${botId}:${st.round}:${st.startedAtMs}:${i}`) % pool.length]);
+  /* کیت را قدم‌به‌قدم می‌گذارد — صحنهٔ ربات واقعاً معنی واژه را نشان می‌دهد */
+  const kit = (round.kit ?? []).filter((k) => SCENE_CARD_MAP.get(k)?.cat !== "bg");
+  for (const k of kit) {
+    if (picks.length >= want) break;
+    picks.push(k);
+  }
+  for (let i = 0; picks.length < want; i++) {
+    const key = pool[hash32(`sc-pick:${botId}:${st.round}:${st.startedAtMs}:${i}`) % pool.length];
+    if (!picks.includes(key)) picks.push(key);
+    if (i > 100) break;
   }
   return picks;
 }
@@ -334,14 +420,16 @@ function snapshotHistory(round: SceneRoomState["rounds"][number], mode: SceneMod
   }
 }
 
-/** حدس ربات — تأخیر ۶ تا ۱۶ ثانیه؛ درست با احتمال ۳۲ تا ۵۵ درصد */
+/** حدس ربات — تأخیر ۶ تا ۱۶ ثانیه؛ احتمال درست‌حدسی با سختی کم می‌شود */
 function botGuesserStep(botId: string, st: SceneRoomState, now: number, elapsed: number): void {
   const round = st.rounds[st.round - 1];
   if (round.scorers.some((s) => s.id === botId)) return;
   if (round.guesses.some((g) => g.id === botId)) return;
   const delay = 6_000 + (hash32(`sc-delay:${botId}:${st.round}:${st.startedAtMs}`) % 10_000);
   if (elapsed < delay) return;
-  const knows = hash32(`sc-knows:${botId}:${st.round}:${st.startedAtMs}`) % 100 < 32 + (hash32(`sc-acc:${botId}:${st.round}`) % 24);
+  const factor = st.difficulty === "easiest" ? 1.4 : st.difficulty === "easy" ? 1 : st.difficulty === "hard" ? 0.72 : 0.55;
+  const knowP = Math.min(85, Math.round((32 + (hash32(`sc-acc:${botId}:${st.round}`) % 24)) * factor));
+  const knows = hash32(`sc-knows:${botId}:${st.round}:${st.startedAtMs}`) % 100 < knowP;
   const text = knows ? round.word : botWrongWord(botId, st, round.word);
   sceneGuess(st, botId, st.players.find((p) => p.id === botId)?.name ?? "ربات", text, now);
 }
@@ -461,8 +549,8 @@ export function sceneTick(st: SceneRoomState, opts: { now: number }): { mutated:
 
 /* ---------- نمای هر عضو ---------- */
 
-/** واژهٔ مخفی فقط برای کارگردان در فاز build بیرون می‌آید —
-    بقیه فقط صحنه و حدس‌ها را می‌بینند؛ در reveal واژه برای همه است. */
+/** واژهٔ مخفی و کیتش فقط برای کارگردان در فاز build بیرون می‌آیند —
+    بقیه فقط صحنه و حدس‌ها را می‌بینند؛ در reveal هر دو برای همه گشوده می‌شوند. */
 export function buildSceneView(
   st: SceneRoomState,
   memberId: string,
@@ -473,11 +561,13 @@ export function buildSceneView(
   const reveal = st.phase === "reveal" || st.phase === "done";
   const isDirector = Boolean(round && round.directorId === memberId);
   const scoresOf = (id: string) => st.scores[id] ?? 0;
+  const kitNow = reveal ? (round?.kit ?? null) : isDirector ? (round?.kit ?? null) : null;
   return {
     startedAtMs: st.startedAtMs,
     now,
     seq: st.seq,
     mode: st.mode,
+    difficulty: st.difficulty,
     round: st.round,
     totalRounds: st.totalRounds,
     phase: st.phase,
@@ -496,12 +586,14 @@ export function buildSceneView(
     directorName: round?.directorName ?? "",
     isMyTurn: isDirector,
     word: reveal ? (round?.word ?? null) : isDirector ? (round?.word ?? null) : null,
+    kit: kitNow,
     toolbox: isDirector && st.phase === "build" ? (round?.toolbox ?? null) : null,
     frameCount: frameCountOf(st.mode),
     board: round ? round.board : null,
     history: reveal && round ? round.history : null,
     cardCount: round ? cardCountOf(round.board) : 0,
     maxCards: maxCardsOf(st.mode),
+    firstPoints: firstPointsOf(st.difficulty),
     guesses: round ? round.guesses.slice(-24) : [],
     solvedCount: round ? round.scorers.length : 0,
     scores: st.scores,

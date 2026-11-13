@@ -29,12 +29,14 @@ import {
   SCENE_BG_TONES,
   SCENE_CARD_MAP,
   SCENE_CARDS,
+  SCENE_DIFF_LABELS,
   SCENE_FRAME_TITLES,
   SCENE_MAX_CARDS,
   SCENE_MAX_CARDS_PER_FRAME,
   SCENE_MODE_LABELS,
   type SceneBoard,
   type SceneCardCat,
+  type SceneCardDef,
   type ScenePlaced,
   type SceneView,
 } from "@/lib/scene-shared";
@@ -218,12 +220,14 @@ function Stage({
 
 function Toolbox({
   toolbox,
+  kit,
   onAdd,
   onBg,
   currentBg,
   disabled,
 }: {
   toolbox: string[] | null;
+  kit: string[] | null;
   onAdd: (key: string) => void;
   onBg: (key: string) => void;
   currentBg: string;
@@ -239,8 +243,39 @@ function Toolbox({
     { c: "bg", label: lang === "fa" ? "پس‌زمینه" : "Background" },
   ];
   const cards = SCENE_CARDS.filter((c) => c.cat === cat).filter((c) => !toolbox || c.cat === "bg" || toolbox.includes(c.k));
+  /* کارت‌های پیشنهادیِ هماهنگ با معنی واژه — پین‌شده بالای جعبه ابزار */
+  const kitCards = (kit ?? []).map((k) => SCENE_CARD_MAP.get(k)).filter((c): c is SceneCardDef => Boolean(c));
   return (
     <section aria-label={lang === "fa" ? "جعبه ابزار" : "Toolbox"} className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3">
+      {kitCards.length > 0 && (
+        <div className="mb-2.5 rounded-xl border border-amber-500/40 bg-amber-500/[0.08] p-2.5">
+          <p className="text-[11px] font-black text-amber-300">
+            ⭐ {lang === "fa" ? "پیشنهادی برای این واژه — متناسب با معنی‌اش" : "Suggested for this word"}
+          </p>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {kitCards.map((c) => {
+              const isBg = c.cat === "bg";
+              const active = isBg && currentBg === c.k;
+              return (
+                <button
+                  key={`kit:${c.k}`}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => (isBg ? onBg(c.k) : onAdd(c.k))}
+                  title={lang === "fa" ? c.fa : c.en}
+                  aria-label={lang === "fa" ? c.fa : c.en}
+                  className={`flex items-center gap-1 rounded-lg border px-2 py-1.5 text-lg transition-colors disabled:opacity-40 ${
+                    active ? "border-amber-400 bg-amber-400/20" : "border-amber-500/50 bg-zinc-950/60 hover:border-amber-300"
+                  }`}
+                >
+                  <span aria-hidden="true">{c.e}</span>
+                  <span className="text-[9px] font-bold text-amber-200/90">{lang === "fa" ? c.fa : c.en}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
       <div className="flex flex-wrap gap-1.5">
         {cats.map(({ c, label }) => (
           <button
@@ -659,6 +694,7 @@ export function SceneClient({ st, offsetMs }: { st: ArenaStateResponse; offsetMs
   }
 
   const modeLabel = SCENE_MODE_LABELS[mode][lang === "fa" ? "fa" : "en"];
+  const diffLabel = SCENE_DIFF_LABELS[view.difficulty]?.[lang === "fa" ? "fa" : "en"] ?? view.difficulty;
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6" dir="rtl">
@@ -670,6 +706,12 @@ export function SceneClient({ st, offsetMs }: { st: ArenaStateResponse; offsetMs
             {lang === "fa" ? "صحنه‌گردان" : "Scene Director"}
             <span className="rounded-full border border-fuchsia-500/40 bg-fuchsia-500/10 px-2 py-0.5 text-[10px] font-black text-fuchsia-300">
               {modeLabel}
+            </span>
+            <span
+              className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-black text-amber-300"
+              title={s.firstPointsLine.replace("{p}", numFmt(view.firstPoints))}
+            >
+              {diffLabel} · {numFmt(view.firstPoints)}
             </span>
           </h1>
           <p className="mt-1 text-xs text-zinc-500">
@@ -857,7 +899,7 @@ export function SceneClient({ st, offsetMs }: { st: ArenaStateResponse; offsetMs
       {/* جعبه ابزار — فقط کارگردان در فاز چیدمان */}
       {isDirector && (
         <div className="mt-3">
-          <Toolbox toolbox={view.toolbox} onAdd={addCard} onBg={setBg} currentBg={board.bg} />
+          <Toolbox toolbox={view.toolbox} kit={view.kit} onAdd={addCard} onBg={setBg} currentBg={board.bg} />
         </div>
       )}
 
