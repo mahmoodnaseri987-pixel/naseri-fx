@@ -3,6 +3,7 @@ import { SiteHeader } from "@/components/site/header";
 import { Hero } from "@/components/site/hero";
 import { Apps } from "@/components/site/apps";
 import { GamesSection } from "@/components/site/games-section";
+import { AppInstall } from "@/components/site/app-install";
 import { BoxesSection } from "@/components/site/boxes-section";
 import { MotionSection } from "@/components/site/motion-section";
 import { RoadmapSection } from "@/components/site/roadmap-section";
@@ -37,6 +38,7 @@ export default async function Home() {
           <Hero content={content} bannerUrl={settings.bannerUrl} />
           <Apps apps={apps} contacts={settings} content={content} />
           <GamesSection games={games} />
+          <AppInstall />
           <BoxesSection boxes={boxes} content={content} />
           <MotionSection
             motionUrl={settings.motionUrl}
