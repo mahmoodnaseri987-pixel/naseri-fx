@@ -53,7 +53,7 @@ export function Contact({ contacts }: ContactProps) {
           <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-zinc-50 sm:text-4xl">
             {c.title}
           </h2>
-          <p className="mt-4 text-sm leading-7 text-zinc-500 sm:text-base">{c.replyNote}</p>
+          <p className="mt-4 text-sm leading-7 text-zinc-400 sm:text-base">{c.replyNote}</p>
         </FadeIn>
 
         <div className={`mt-12 grid gap-5 sm:grid-cols-2 ${cards.length > 2 ? "lg:grid-cols-4" : "lg:grid-cols-2"}`}>

@@ -67,7 +67,7 @@ export function RoadmapSection() {
               <span className="absolute -right-1 top-1/2 h-3 w-3 -translate-y-1/2 animate-pulse rounded-full bg-emerald-300 shadow-[0_0_12px] shadow-emerald-400/80" />
             </div>
           </div>
-          <p className="mt-2.5 text-xs leading-6 text-zinc-500">{r.progressNote}</p>
+          <p className="mt-2.5 text-xs leading-6 text-zinc-400">{r.progressNote}</p>
         </FadeIn>
 
         {/* چهار فاز مسیر */}
