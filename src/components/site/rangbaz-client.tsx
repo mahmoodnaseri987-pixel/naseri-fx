@@ -92,6 +92,7 @@ export function RangbazClient({ st, offsetMs }: { st: ArenaStateResponse; offset
       onDrawPass={() => void post("rb_draw")}
       onCall={() => void post("rb_call")}
       onCatch={() => void post("rb_catch")}
+      onAgain={st.me === st.room.hostId ? () => void post("again") : undefined}
       header={
         <>
           <div className="flex flex-wrap items-center justify-between gap-2">

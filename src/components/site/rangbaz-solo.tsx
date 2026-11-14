@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useLang } from "@/components/site/language-provider";
-import { RangbazTable } from "@/components/site/rangbaz-table";
+import { RangbazTable, RbCardArt } from "@/components/site/rangbaz-table";
 import {
   buildRbView,
   rbBotMove,
@@ -22,7 +22,7 @@ import {
   rbPlay,
   rbTick,
 } from "@/lib/rangbaz-engine";
-import { RB_GAME_SLUG, type RbColor, type RbState, type RbView } from "@/lib/rangbaz-shared";
+import { type RbState, type RbView } from "@/lib/rangbaz-shared";
 
 type Diff = 1 | 2 | 3;
 type Mode = "menu" | "quick" | "story" | "daily";
@@ -95,6 +95,15 @@ function dailySeed(): number {
 
 const DIFF_FA = { 1: "تازه‌کار", 2: "حرفه‌ای", 3: "استاد" } as const;
 const DIFF_EN = { 1: "Rookie", 2: "Pro", 3: "Master" } as const;
+const DIFF_ICON = { 1: "🌱", 2: "🛡", 3: "👑" } as const;
+
+const RB_MENU_CSS = `
+@keyframes rbBob { 0%,100% { transform: translateY(0) rotate(var(--r0,0deg)); } 50% { transform: translateY(-12px) rotate(var(--r1,0deg)); } }
+@keyframes rbTitleGlow { 0%,100% { filter: drop-shadow(0 0 10px rgba(139,92,246,.45)); } 50% { filter: drop-shadow(0 0 26px rgba(217,70,239,.7)); } }
+@keyframes rbAuroraA { 0%,100% { transform: translate(-12%, -8%) scale(1); } 50% { transform: translate(10%, 6%) scale(1.25); } }
+@keyframes rbAuroraB { 0%,100% { transform: translate(10%, 10%) scale(1.15); } 50% { transform: translate(-8%, -6%) scale(.9); } }
+.rb-menu-glass { background: linear-gradient(160deg, rgba(20,18,34,.78), rgba(10,10,20,.72)); backdrop-filter: blur(12px); border: 1px solid rgba(148,163,184,.14); }
+`;
 
 export function RangbazSolo() {
   const { lang } = useLang();
@@ -111,6 +120,7 @@ export function RangbazSolo() {
   const botTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const catchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const finishedRef = useRef(false);
+  const lastCfgRef = useRef<Parameters<typeof startGame>[0] | null>(null);
 
   useEffect(() => {
     setStats(loadStats());
@@ -207,6 +217,7 @@ export function RangbazSolo() {
   const startGame = useCallback(
     (cfg: { bots: number; diff: Diff; handSize?: 5 | 7; fastTurn?: boolean; opponentExtra?: number; fogAlways?: boolean; noCustom?: boolean; noStack?: boolean; seed?: number }) => {
       finishedRef.current = false;
+      lastCfgRef.current = cfg;
       const bots = BOT_DEFS.slice(0, cfg.bots);
       const players = [
         { id: "me-solo", name: fa ? "تو" : "You", bot: 0 as const },
@@ -270,39 +281,75 @@ export function RangbazSolo() {
 
   /* ─────────── منو ─────────── */
   if (mode === "menu" || !view) {
+    const dailyToday = stats.dailyKey === String(dailySeed());
     return (
-      <div className="relative mx-auto min-h-[100svh] w-full max-w-xl px-4 py-10 sm:px-6" dir="rtl">
+      <div className="relative mx-auto min-h-[100svh] w-full max-w-xl px-4 py-8 sm:px-6" dir="rtl">
+        <style dangerouslySetInnerHTML={{ __html: RB_MENU_CSS }} />
+
+        {/* سالن نئونی */}
+        <div className="pointer-events-none absolute inset-0 -z-30" style={{ background: "#05050d" }} />
         <div
-          className="pointer-events-none absolute inset-0 -z-10"
-          style={{
-            background:
-              "radial-gradient(800px 400px at 50% -5%, rgba(139,92,246,.16), transparent 60%), radial-gradient(600px 420px at 90% 100%, rgba(56,189,248,.1), transparent 60%), #09090f",
-          }}
+          className="pointer-events-none absolute -left-1/4 -top-1/3 -z-20 h-[130%] w-[150%]"
+          style={{ background: "radial-gradient(closest-side, rgba(139,92,246,.18), transparent 70%)", animation: "rbAuroraA 14s ease-in-out infinite" }}
         />
-        <div className="text-center">
-          <h1 className="text-3xl font-black text-zinc-50">
-            🎴 {fa ? "رنگ‌باز" : "Rangbaz"}
+        <div
+          className="pointer-events-none absolute -left-1/4 -top-1/3 -z-20 h-[130%] w-[150%]"
+          style={{ background: "radial-gradient(closest-side, rgba(56,189,248,.12), transparent 72%), radial-gradient(closest-side, rgba(236,72,153,.08), transparent 72%)", animation: "rbAuroraB 18s ease-in-out infinite" }}
+        />
+
+        {/* هیرو */}
+        <div className="relative pt-4 text-center">
+          <div className="mx-auto flex h-[110px] w-[230px] items-center justify-center">
+            <span style={{ "--r0": "-14deg", "--r1": "-18deg", animation: "rbBob 3.4s ease-in-out infinite", position: "absolute", transform: "translateX(-52px)" } as React.CSSProperties}>
+              <RbCardArt card={{ id: "h1", k: "num", c: "red", n: 7 }} size={0.92} />
+            </span>
+            <span style={{ "--r0": "0deg", "--r1": "2deg", animation: "rbBob 3.4s ease-in-out .4s infinite", position: "absolute", zIndex: 2 } as React.CSSProperties}>
+              <RbCardArt card={{ id: "h2", k: "wild4", c: null }} size={1.02} />
+            </span>
+            <span style={{ "--r0": "14deg", "--r1": "18deg", animation: "rbBob 3.4s ease-in-out .8s infinite", position: "absolute", transform: "translateX(52px)" } as React.CSSProperties}>
+              <RbCardArt card={{ id: "h3", k: "num", c: "blue", n: 3 }} size={0.92} />
+            </span>
+          </div>
+          <h1
+            className="mt-3 text-4xl font-black tracking-tight"
+            style={{
+              background: "linear-gradient(100deg,#a78bfa 10%,#e879f9 45%,#38bdf8 90%)",
+              WebkitBackgroundClip: "text",
+              backgroundClip: "text",
+              color: "transparent",
+              animation: "rbTitleGlow 3s ease-in-out infinite",
+            }}
+          >
+            {fa ? "رنگ‌باز" : "Rangbaz"}
           </h1>
-          <p className="mt-2 text-sm leading-7 text-zinc-400">
+          <p className="mx-auto mt-2 max-w-md text-[13px] leading-7 text-zinc-400">
             {fa
               ? "کارت هم‌رنگ یا هم‌عدد بینداز؛ با یک کارتِ مانده دکمهٔ «رنگ‌باز!» را بزن. سالنی نئونی، ربات‌های شخصیت‌دار و کارت‌های مخصوص آینه، تعویض دست و مه."
               : "Match color or number; hit “one left!” with a single card. Neon hall, character bots, special Mirror/Swap/Fog cards."}
           </p>
         </div>
 
-        <div className="rb-glass mt-8 rounded-3xl p-5">
-          <p className="text-xs font-black text-zinc-400">{fa ? "سطح ربات‌ها" : "bot level"}</p>
+        {/* بازی سریع */}
+        <div className="rb-menu-glass mt-7 rounded-3xl p-5" style={{ boxShadow: "0 0 40px rgba(139,92,246,.08)" }}>
+          <p className="flex items-center gap-2 text-sm font-black text-zinc-100">
+            <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-violet-500/20 text-sm">⚡</span>
+            {fa ? "بازی سریع" : "Quick play"}
+          </p>
+          <p className="mt-3 text-xs font-black text-zinc-400">{fa ? "سطح ربات‌ها" : "bot level"}</p>
           <div className="mt-2 grid grid-cols-3 gap-2">
             {([1, 2, 3] as Diff[]).map((d) => (
               <button
                 key={d}
                 type="button"
                 onClick={() => setDiff(d)}
-                className={`rounded-2xl border px-3 py-2.5 text-xs font-black ${
-                  diff === d ? "border-violet-400 bg-violet-500/15 text-violet-200" : "border-zinc-800 bg-zinc-900/60 text-zinc-400"
+                className={`rounded-2xl border px-3 py-2.5 text-xs font-black transition-all ${
+                  diff === d
+                    ? "border-violet-400 bg-violet-500/15 text-violet-200"
+                    : "border-zinc-800 bg-zinc-950/60 text-zinc-400 hover:border-zinc-700"
                 }`}
+                style={diff === d ? { boxShadow: "0 0 16px rgba(139,92,246,.3)" } : undefined}
               >
-                {fa ? DIFF_FA[d] : DIFF_EN[d]}
+                {DIFF_ICON[d]} {fa ? DIFF_FA[d] : DIFF_EN[d]}
               </button>
             ))}
           </div>
@@ -313,38 +360,54 @@ export function RangbazSolo() {
                 key={n}
                 type="button"
                 onClick={() => setBotCount(n)}
-                className={`rounded-2xl border px-3 py-2.5 text-xs font-black ${
-                  botCount === n ? "border-violet-400 bg-violet-500/15 text-violet-200" : "border-zinc-800 bg-zinc-900/60 text-zinc-400"
+                className={`rounded-2xl border px-3 py-2.5 text-xs font-black transition-all ${
+                  botCount === n
+                    ? "border-violet-400 bg-violet-500/15 text-violet-200"
+                    : "border-zinc-800 bg-zinc-950/60 text-zinc-400 hover:border-zinc-700"
                 }`}
               >
                 {n} {fa ? "ربات" : "bots"}
               </button>
             ))}
           </div>
-          <p className="mt-3 text-center text-[10px] leading-5 text-zinc-500">
-            {fa
-              ? "شاهین هجومی است، نگار محتاط و بابک بلوف‌زن — رنگ میز را عمداً عوض می‌کند."
-              : "Shahin is aggressive, Negar cautious, Babak bluffs with wild colors."}
-          </p>
+          <div className="mt-3 flex flex-wrap justify-center gap-1.5">
+            {BOT_DEFS.map((b) => (
+              <span key={b.id} className="rounded-full border border-zinc-800 bg-zinc-950/70 px-2.5 py-1 text-[10px] font-bold text-zinc-400">
+                {fa ? b.nameFa : b.nameEn}
+                {fa ? (b.persona === "shahin" ? " — هجومی" : b.persona === "negar" ? " — محتاط" : " — بلوف‌زن") : b.persona === "shahin" ? " — aggressive" : b.persona === "negar" ? " — cautious" : " — bluffer"}
+              </span>
+            ))}
+          </div>
           <button
             type="button"
             onClick={() => {
               setMode("quick");
               startGame({ bots: botCount, diff });
             }}
-            className="mt-4 w-full rounded-2xl bg-violet-500 py-3.5 text-sm font-black text-zinc-950 shadow-lg shadow-violet-500/30"
+            className="mt-4 w-full rounded-2xl bg-gradient-to-l from-violet-500 to-fuchsia-500 py-3.5 text-sm font-black text-zinc-950 active:scale-95"
+            style={{ boxShadow: "0 0 30px rgba(139,92,246,.4)" }}
           >
-            ▶ {fa ? "بازی سریع" : "Quick play"}
+            ▶ {fa ? "شروع بازی" : "Start"}
           </button>
         </div>
 
-        <div className="rb-glass mt-4 rounded-3xl p-5">
-          <p className="text-sm font-black text-zinc-100">🗺 {fa ? "ماجراجویی" : "Adventure"}</p>
-          <p className="mt-1 text-[11px] leading-5 text-zinc-500">
-            {fa
-              ? "۱۵ مرحله با قوانین ویژه: نوبت ۱۰ ثانیه‌ای، حریف با کارت اضافه، مهِ همیشگی… باس‌ها: ۵، ۱۰ و ۱۵."
-              : "15 levels with special rules; bosses at 5, 10, 15."}
-          </p>
+        {/* ماجراجویی */}
+        <div className="rb-menu-glass mt-4 rounded-3xl p-5" style={{ boxShadow: "0 0 40px rgba(251,191,36,.06)" }}>
+          <div className="flex items-center justify-between">
+            <p className="flex items-center gap-2 text-sm font-black text-zinc-100">
+              <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-amber-500/20 text-sm">🗺</span>
+              {fa ? "ماجراجویی" : "Adventure"}
+            </p>
+            <span className="text-[10px] font-black text-amber-300">
+              {story.unlocked - 1}/{LEVELS.length} {fa ? "مرحله" : "done"}
+            </span>
+          </div>
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-zinc-800">
+            <div
+              className="h-full rounded-full bg-gradient-to-l from-amber-400 to-orange-400"
+              style={{ width: `${((story.unlocked - 1) / LEVELS.length) * 100}%`, boxShadow: "0 0 10px rgba(251,191,36,.6)" }}
+            />
+          </div>
           <div className="mt-3 grid grid-cols-5 gap-1.5">
             {LEVELS.map((_, i) => {
               const n = i + 1;
@@ -358,33 +421,47 @@ export function RangbazSolo() {
                   onClick={() => {
                     setLevel(n);
                     setMode("story");
-                    startGame({ bots: LEVELS[i].bots, diff: LEVELS[i].diff, ...LEVELS[i] });
+                    startGame({ ...LEVELS[i], bots: LEVELS[i].bots, diff: LEVELS[i].diff });
                   }}
-                  className={`rounded-xl border py-2 text-xs font-black ${
+                  className={`rounded-xl border py-2 text-xs font-black transition-all ${
                     !unlocked
-                      ? "border-zinc-800 bg-zinc-900/40 text-zinc-600"
+                      ? "border-zinc-800 bg-zinc-950/40 text-zinc-600"
                       : boss
                         ? "border-amber-500/60 bg-amber-500/15 text-amber-300"
                         : "border-violet-500/50 bg-violet-500/10 text-violet-200"
                   }`}
+                  style={unlocked ? { boxShadow: boss ? "0 0 14px rgba(251,191,36,.25)" : "0 0 14px rgba(139,92,246,.18)" } : undefined}
                 >
-                  {unlocked ? n : "🔒"}
+                  {unlocked ? (boss ? `⚡${n}` : n) : "🔒"}
                 </button>
               );
             })}
           </div>
+          <p className="mt-2.5 text-[11px] leading-5 text-zinc-500">
+            {fa
+              ? "قوانین ویژه در راه است: نوبت ۱۰ ثانیه‌ای، حریف با کارت اضافه، مهِ همیشگی، بدون جمع جریمه… باس‌ها: ۵، ۱۰ و ۱۵."
+              : "Special rules ahead: 10s turns, extra opponent cards, eternal fog, no stacking… bosses at 5, 10, 15."}
+          </p>
         </div>
 
-        <div className="rb-glass mt-4 rounded-3xl p-5 text-center">
-          <p className="text-sm font-black text-zinc-100">🌅 {fa ? "چالش روزانه" : "Daily challenge"}</p>
-          <p className="mt-1 text-[11px] leading-5 text-zinc-500">
+        {/* چالش روزانه */}
+        <div
+          className="rb-menu-glass mt-4 rounded-3xl p-5 text-center"
+          style={{ boxShadow: "0 0 40px rgba(56,189,248,.07)", borderColor: "rgba(56,189,248,.25)" }}
+        >
+          <p className="flex items-center justify-center gap-2 text-sm font-black text-zinc-100">
+            <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-sky-500/20 text-sm">🌅</span>
+            {fa ? "چالش روزانه" : "Daily challenge"}
+          </p>
+          <p className="mt-1.5 text-[11px] leading-5 text-zinc-500">
             {fa
               ? "هر روز یک دست ثابت و مشترک برای همه — سه ربات حرفه‌ای؛ بهترین امتیازت ثبت می‌شود."
               : "One shared fixed deal each day — three pro bots; your best score is saved."}
           </p>
-          <p className="mt-2 text-xs font-bold text-amber-300">
+          <p className="mt-2 text-xs font-bold" style={{ color: dailyToday ? "#fbbf24" : "#71717a" }}>
             {fa ? "بهترین امتیاز امروز شما: " : "your best today: "}
-            {stats.dailyKey === String(dailySeed()) ? stats.dailyScore : 0}
+            <b className="tabular-nums">{dailyToday ? stats.dailyScore : 0}</b>
+            {dailyToday && fa && " ✓ انجام دادی"}
           </p>
           <button
             type="button"
@@ -392,21 +469,26 @@ export function RangbazSolo() {
               setMode("daily");
               startGame({ bots: 3, diff: 2, seed: dailySeed() });
             }}
-            className="mt-3 w-full rounded-2xl bg-amber-400 py-3.5 text-sm font-black text-zinc-950 shadow-lg shadow-amber-400/30"
+            className="mt-3 w-full rounded-2xl bg-gradient-to-l from-sky-400 to-cyan-400 py-3.5 text-sm font-black text-zinc-950 active:scale-95"
+            style={{ boxShadow: "0 0 30px rgba(56,189,248,.35)" }}
           >
             🌅 {fa ? "چالش امروز" : "Play today"}
           </button>
         </div>
 
-        <div className="rb-glass mt-4 flex items-center justify-between rounded-3xl px-5 py-4 text-xs font-bold text-zinc-400">
-          <span>🎯 {fa ? "بازی‌ها" : "games"}: {stats.played}</span>
-          <span>🏆 {fa ? "بردها" : "wins"}: {stats.wins}</span>
-          <span>⭐ {fa ? "رکورد روزانه" : "best daily"}: {stats.bestDaily}</span>
+        {/* رکوردها */}
+        <div className="rb-menu-glass mt-4 flex items-center justify-between rounded-3xl px-5 py-4 text-xs font-bold text-zinc-400">
+          <span>🎯 {fa ? "بازی‌ها" : "games"}: <b className="tabular-nums text-zinc-200">{stats.played}</b></span>
+          <span>🏆 {fa ? "بردها" : "wins"}: <b className="tabular-nums text-zinc-200">{stats.wins}</b></span>
+          <span>⭐ {fa ? "رکورد روزانه" : "best daily"}: <b className="tabular-nums text-zinc-200">{stats.bestDaily}</b></span>
         </div>
 
-        <div className="mt-6 text-center">
+        <div className="mt-6 flex items-center justify-center gap-5 pb-2">
           <Link href="/arena" className="text-xs font-bold text-zinc-500 hover:text-zinc-300">
             ← {fa ? "بازگشت به آرنا" : "back to arena"}
+          </Link>
+          <Link href="/records" className="text-xs font-bold text-zinc-500 hover:text-zinc-300">
+            🏆 {fa ? "تالار رکوردها" : "records hall"}
           </Link>
         </div>
       </div>
@@ -415,9 +497,7 @@ export function RangbazSolo() {
 
   /* ─────────── میز بازی ─────────── */
   const levelCfg = LEVELS[level - 1];
-  const levelTitle = fa
-    ? `مرحلهٔ ${level}${level % 5 === 0 ? " — ⚡ باس" : ""}`
-    : `Level ${level}${level % 5 === 0 ? " — ⚡ boss" : ""}`;
+  const levelTitle = fa ? `مرحلهٔ ${level}${level % 5 === 0 ? " — ⚡ باس" : ""}` : `Level ${level}${level % 5 === 0 ? " — ⚡ boss" : ""}`;
 
   return (
     <RangbazTable
@@ -442,6 +522,9 @@ export function RangbazSolo() {
           if (st) rbCatch(st, "me-solo", { now: Date.now() });
         })
       }
+      onAgain={() => {
+        if (lastCfgRef.current) startGame(lastCfgRef.current);
+      }}
       header={
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h1 className="flex items-center gap-2 text-lg font-extrabold text-zinc-50">
@@ -465,7 +548,7 @@ export function RangbazSolo() {
           <button
             type="button"
             onClick={leaveTable}
-            className="rounded-xl border border-zinc-700 bg-zinc-900/70 px-3 py-1.5 text-[11px] font-black text-zinc-300 hover:bg-zinc-800"
+            className="rounded-xl border border-zinc-700 bg-zinc-950/70 px-3 py-1.5 text-[11px] font-black text-zinc-300 hover:bg-zinc-800"
           >
             ✕ {fa ? "خروج" : "leave"}
           </button>
@@ -487,6 +570,3 @@ export function RangbazSolo() {
     />
   );
 }
-
-/* جلوگیری از tree-shaking بی‌دلیل اسلاگ */
-export const RB_SOLO_SLUG = RB_GAME_SLUG;
