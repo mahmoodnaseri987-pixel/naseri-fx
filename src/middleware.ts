@@ -25,7 +25,8 @@ export function middleware(req: NextRequest) {
     pathname === "/sher-admin" ||
     pathname.startsWith("/sher-admin/") ||
     pathname === "/" ||
-    pathname === "/fire"
+    pathname === "/fire" ||
+    pathname === "/rangbaz"
   ) {
     return NextResponse.next();
   }
