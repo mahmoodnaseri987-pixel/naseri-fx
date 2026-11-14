@@ -19,7 +19,7 @@ export const metadata: Metadata = {
   ],
   authors: [{ name: "محمود ناصری" }],
   icons: {
-    icon: "/favicon.svg",
+    icon: "/icon-192.png",
     apple: "/apple-touch-icon.png",
   },
   openGraph: {
