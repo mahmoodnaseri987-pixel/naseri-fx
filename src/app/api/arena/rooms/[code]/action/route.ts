@@ -99,7 +99,17 @@ import {
   pcValidateBoard,
   pcVote,
 } from "@/lib/proverb-engine";
-import { invalidateRoomSnapshot, parseState, persistFireState, persistLudoState, persistPcState, persistSherState, settleLudo } from "@/lib/arena-live";
+import { RB_GAME_SLUG, rbParseState } from "@/lib/rangbaz-shared";
+import {
+  rbCall,
+  rbCatch,
+  rbCreateState,
+  rbDefaultSettings,
+  rbDrawOrPass,
+  rbPlay,
+  rbTick,
+} from "@/lib/rangbaz-engine";
+import { invalidateRoomSnapshot, parseState, persistFireState, persistLudoState, persistPcState, persistRbState, persistSherState, settleLudo } from "@/lib/arena-live";
 
 /** خواندن امن فرادادهٔ اتاق (مثل گروه سنی) از JSON خام state — قبل از شروع بازی */
 function safeStateMeta(raw: string): { ageGroup?: unknown; jadvalSher?: unknown } {
@@ -121,6 +131,16 @@ function roomJadvalSher(room: { state: string }): boolean {
     return data?.sher === true;
   } catch {
     return false;
+  }
+}
+
+/** تنظیمات لابی «رنگ‌باز» از JSON خام state — قبل از شروع دست */
+function safeRbMeta(raw: string): { rbHand?: number; rbStack?: boolean; rbCustom?: boolean } {
+  try {
+    const data = JSON.parse(raw) as { rbHand?: unknown; rbStack?: unknown; rbCustom?: unknown };
+    return data && typeof data === "object" ? data : {};
+  } catch {
+    return {};
   }
 }
 
@@ -1288,6 +1308,155 @@ export async function POST(
     /* ready / leave / again → منطق مشترک پایین اجرا می‌شود */
   }
 
+  /* ================================================================
+     اکشن‌های اختصاصی «رنگ‌باز» — میز کارتی نئونی (۲ تا ۸ نفر)
+     ================================================================ */
+  if (room.gameSlug === RB_GAME_SLUG) {
+    /* --- شروع دست (میزبان، حداقل ۲ نفر، همه آماده) --- */
+    if (type === "start") {
+      if (room.status !== "lobby") {
+        return NextResponse.json({ error: "conflict" }, { status: 409 });
+      }
+      if (room.hostId !== me.memberId) {
+        return NextResponse.json({ error: "not host" }, { status: 403 });
+      }
+      if (room.members.length < MIN_PLAYERS) {
+        return NextResponse.json({ error: "need players" }, { status: 409 });
+      }
+      if (!room.members.every((m) => m.isReady)) {
+        return NextResponse.json({ error: "not ready" }, { status: 409 });
+      }
+      const meta = safeRbMeta(room.state);
+      const settings = rbDefaultSettings({
+        handSize: meta.rbHand === 5 ? 5 : 7,
+        stacking: meta.rbStack ?? true,
+        custom: meta.rbCustom ?? true,
+      });
+      const rbState = rbCreateState(
+        room.members.map((m) => ({ id: m.memberId, name: m.name, bot: 0 as const })),
+        settings,
+        Date.now(),
+      );
+      if (!rbState) {
+        return NextResponse.json({ error: "need players" }, { status: 409 });
+      }
+      await db.$transaction([
+        db.room.update({
+          where: { id: room.id },
+          data: { status: "playing", state: JSON.stringify(rbState) },
+        }),
+        db.roomMember.updateMany({
+          where: { roomId: room.id },
+          data: { isReady: false, fireInput: "{}" },
+        }),
+        db.chatMessage.create({
+          data: {
+            scope: room.code,
+            memberId: me.memberId,
+            name: me.name,
+            content: "مسابقهٔ «رنگ‌باز» شروع شد — رنگ یا عدد بچسبانید و با یک کارت، «رنگ‌باز!» بگویید!",
+            kind: "system",
+          },
+        }),
+      ]);
+      invalidateRoomSnapshot(room.code);
+      return NextResponse.json({ ok: true });
+    }
+
+    /* --- بازی کردن کارت (رنگ انتخابی، هدف تعویض، اعلام رنگ‌باز) --- */
+    if (type === "rb_play") {
+      if (room.status !== "playing") {
+        return NextResponse.json({ error: "conflict" }, { status: 409 });
+      }
+      const rbState = rbParseState(room.state);
+      if (!rbState) return NextResponse.json({ error: "gone" }, { status: 404 });
+      rbTick(rbState, { now: Date.now() });
+      if (rbState.phase !== "play") {
+        return NextResponse.json({ error: "conflict" }, { status: 409 });
+      }
+      const outcome = rbPlay(
+        rbState,
+        me.memberId,
+        typeof body.cardId === "string" ? body.cardId : "",
+        {
+          color: typeof body.color === "string" ? body.color : undefined,
+          targetId: typeof body.targetId === "string" ? body.targetId : undefined,
+          call: body.call === true,
+        },
+        { now: Date.now() },
+      );
+      if (!outcome.ok) {
+        return NextResponse.json({ error: outcome.reason ?? "conflict" }, { status: 409 });
+      }
+      const persisted = await persistRbState(room.id, rbState);
+      invalidateRoomSnapshot(room.code);
+      if (!persisted) {
+        return NextResponse.json({ error: "conflict" }, { status: 409 });
+      }
+      return NextResponse.json({ ok: true });
+    }
+
+    /* --- کشیدن کارت / گرفتن جریمه / گذر --- */
+    if (type === "rb_draw") {
+      if (room.status !== "playing") {
+        return NextResponse.json({ error: "conflict" }, { status: 409 });
+      }
+      const rbState = rbParseState(room.state);
+      if (!rbState) return NextResponse.json({ error: "gone" }, { status: 404 });
+      rbTick(rbState, { now: Date.now() });
+      const outcome = rbDrawOrPass(rbState, me.memberId, { now: Date.now() });
+      if (!outcome.ok) {
+        return NextResponse.json({ error: outcome.reason ?? "conflict" }, { status: 409 });
+      }
+      const persisted = await persistRbState(room.id, rbState);
+      invalidateRoomSnapshot(room.code);
+      if (!persisted) {
+        return NextResponse.json({ error: "conflict" }, { status: 409 });
+      }
+      return NextResponse.json({ ok: true });
+    }
+
+    /* --- گفتن «رنگ‌باز!» با یک کارت باقی‌مانده --- */
+    if (type === "rb_call") {
+      if (room.status !== "playing") {
+        return NextResponse.json({ error: "conflict" }, { status: 409 });
+      }
+      const rbState = rbParseState(room.state);
+      if (!rbState) return NextResponse.json({ error: "gone" }, { status: 404 });
+      const outcome = rbCall(rbState, me.memberId, { now: Date.now() });
+      if (!outcome.ok) {
+        return NextResponse.json({ error: outcome.reason ?? "conflict" }, { status: 409 });
+      }
+      const persisted = await persistRbState(room.id, rbState);
+      invalidateRoomSnapshot(room.code);
+      if (!persisted) {
+        return NextResponse.json({ error: "conflict" }, { status: 409 });
+      }
+      return NextResponse.json({ ok: true });
+    }
+
+    /* --- لو دادن بازیکنی که رنگ‌باز نگفته --- */
+    if (type === "rb_catch") {
+      if (room.status !== "playing") {
+        return NextResponse.json({ error: "conflict" }, { status: 409 });
+      }
+      const rbState = rbParseState(room.state);
+      if (!rbState) return NextResponse.json({ error: "gone" }, { status: 404 });
+      const outcome = rbCatch(rbState, me.memberId, { now: Date.now() });
+      if (!outcome.ok) {
+        return NextResponse.json({ error: outcome.reason ?? "conflict" }, { status: 409 });
+      }
+      const persisted = await persistRbState(room.id, rbState);
+      invalidateRoomSnapshot(room.code);
+      if (!persisted) {
+        return NextResponse.json({ error: "conflict" }, { status: 409 });
+      }
+      return NextResponse.json({ ok: true });
+    }
+
+    /* ready / leave / again → منطق مشترک پایین اجرا می‌شود */
+  }
+
   /* --- پرکردن صندلی‌های خالی با ربات (میزبان، فقط لابی، فقط بازی‌های سؤالی) ---
      میزبان بین «انتظار برای تکمیل بازیکنان» و «شروع با ربات» آزاد است؛
      هر ربات بلافاصله آماده است و در مسابقه سؤالی/جدول/حدس تصویر واقعاً بازی می‌کند. */
@@ -1495,6 +1664,16 @@ export async function POST(
         if (pcMode) meta.pcMode = pcMode;
         if (pcTeams) meta.pcTeams = pcTeams;
         return JSON.stringify(meta);
+      }
+      /* رنگ‌باز: تنظیمات میزبان (تعداد کارت شروع، جمع جریمه، کارت‌های اختصاصی) حفظ می‌شود */
+      if (room.gameSlug === RB_GAME_SLUG) {
+        const past = rbParseState(room.state);
+        return JSON.stringify({
+          ageGroup: roomAgeGroup(room),
+          rbHand: past?.s.handSize,
+          rbStack: past?.s.stacking ?? true,
+          rbCustom: past?.s.custom ?? true,
+        });
       }
       /* منچ: بازی تیمی و گروه سنی برای مسابقهٔ بعدی هم می‌ماند */
       return JSON.stringify({

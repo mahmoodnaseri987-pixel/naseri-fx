@@ -14,13 +14,14 @@ import { PIC_GAME_SLUG } from "@/lib/pic-shared";
 import { LUDO_GAME_SLUG } from "@/lib/ludo-shared";
 import { SHER_GAME_SLUG, isSherCategory } from "@/lib/sher-shared";
 import { PC_GAME_SLUG, PC_MODES, pcLobbyMode, type PcMode } from "@/lib/proverb-shared";
+import { RB_GAME_SLUG } from "@/lib/rangbaz-shared";
 import { getArenaGameDef } from "@/lib/arena-registry";
 import { housekeeping } from "@/lib/arena-server";
 import { getArenaCatalog, isRoomGameEnabled } from "@/lib/arena-catalog";
 import type { ArenaRoomSummary } from "@/lib/types";
 
 /* «میدان آتش» آنلاین کنار گذاشته شد — نسخه آفلاین تک‌نفره در /fire سرو می‌شود */
-const GAME_SLUGS = new Set([ARENA_GAME_SLUG, NABARD_GAME_SLUG, JADVAL_GAME_SLUG, PIC_GAME_SLUG, LUDO_GAME_SLUG, SHER_GAME_SLUG, PC_GAME_SLUG]);
+const GAME_SLUGS = new Set([ARENA_GAME_SLUG, NABARD_GAME_SLUG, JADVAL_GAME_SLUG, PIC_GAME_SLUG, LUDO_GAME_SLUG, SHER_GAME_SLUG, PC_GAME_SLUG, RB_GAME_SLUG]);
 const MAX_ACTIVE_ROOMS = 30;
 
 export async function GET() {
@@ -161,7 +162,14 @@ export async function POST(req: NextRequest) {
                         : "classic",
                       pcTeams: Number(body.pcTeams) === 4 ? 4 : 2,
                     }
-                : { ageGroup, jadvalSher: body.jadvalSher === true },
+                  : gameSlug === RB_GAME_SLUG
+                      ? {
+                          ageGroup,
+                          rbHand: Number(body.rbHand) === 5 ? 5 : 7,
+                          rbStack: body.rbStack !== false,
+                          rbCustom: body.rbCustom !== false,
+                        }
+                      : { ageGroup, jadvalSher: body.jadvalSher === true },
           ),
         },
       });

@@ -130,6 +130,8 @@ export const dict = {
       gameSherDesc: "کلیپ آهنگ قطع می‌شود — بیت بعدی را سریع‌تر از بقیه حدس بزن",
       gameProverb: "ضرب‌المثل‌چین",
       gameProverbDesc: "ضرب‌المثل به کارت‌های کلمه‌ای متحرک شکسته می‌شود — صحنه را بچین، بقیه ضرب‌المثل را حدس بزنند",
+      gameRangbaz: "رنگ‌باز",
+      gameRangbazDesc: "بازی کارتی نئونی — رنگ یا عدد بچسبان، با یک کارت «رنگ‌باز!» بگو و با آینه و مه غافلگیر کن",
       gameDisabled: "این بازی موقتاً توسط مدیر از آرنا حذف شده است.",
       noGames: "فعلاً بازی فعالی در آرنا نیست؛ به‌زودی برمی‌گردد.",
       playersLabel: "تعداد بازیکن در اتاق",
@@ -354,6 +356,20 @@ export const dict = {
         noAwards: "این بار هیچ جایزه‌ای صاحب پیدا نکرد — دور بعد بدرخش!",
         sendError: "ارسال نشد؛ دوباره تلاش کن.",
         startingIn: "مسابقه تا چند ثانیه دیگر شروع می‌شود…",
+      },
+      rb: {
+        lobbyHint:
+          "کارت هم‌رنگ یا هم‌عدد روی کارت رو بیندازید؛ «ممنوع» نوبت را می‌سوزاند، «برگشت» جهت را عوض می‌کند و «+۲» کارت جریمه می‌دهد. «تغییر رنگ» و «+۴» رنگ بعدی را انتخاب می‌کنند. کارت‌های مخصوص: «آینه» کارت آخر را به دستِ صاحبش برمی‌گرداند، «تعویض دست» را با هر بازیکنی عوض کنید و «مه» تعداد کارت بقیه را تا یک دور پنهان می‌کند. با یک کارتِ مانده دکمهٔ «رنگ‌باز!» را بزنید وگرنه دو کارت جریمه می‌شوید.",
+        handLabel: "کارت شروع",
+        hand5: "۵ کارت",
+        hand7: "۷ کارت",
+        stackLabel: "جمع‌شدن جریمه",
+        stackOn: "فعال — +۲ روی +۲",
+        stackOff: "غیرفعال",
+        customLabel: "کارت‌های اختصاصی",
+        customOn: "فعال — آینه، تعویض، مه",
+        customOff: "غیرفعال",
+        soloCta: "بازی تک‌نفره با ربات‌ها",
       },
       sher: {
         lobbyHint:
@@ -774,6 +790,8 @@ export const dict = {
       gameSherDesc: "The song cuts off mid-verse — guess the next line before everyone else",
       gameProverb: "Proverb Craft",
       gameProverbDesc: "Proverbs broken into animated word cards — arrange the scene and let them guess",
+      gameRangbaz: "Rangbaz",
+      gameRangbazDesc: "Neon card game — match color or number, call “Rangbaz!”, surprise rivals with Mirror & Fog",
       gameDisabled: "This game has been temporarily removed from the arena by the admin.",
       noGames: "No active games in the arena right now — check back soon.",
       playersLabel: "Players in the room",
@@ -998,6 +1016,20 @@ export const dict = {
         noAwards: "No award found an owner this time — shine next round!",
         sendError: "Failed to send; try again.",
         startingIn: "The match starts in a few seconds…",
+      },
+      rb: {
+        lobbyHint:
+          "Play a card matching the color or number; “Skip” burns the turn, “Reverse” flips direction and “+2” deals penalty cards. “Wild” and “Wild +4” pick the next color. Special cards: “Mirror” returns the last card to its owner's hand, “Swap” trades your hand with anyone, “Fog” hides everyone's card count for one full round. With a single card left, hit “Rangbaz!” — or take a 2-card penalty.",
+        handLabel: "Starting hand",
+        hand5: "5 cards",
+        hand7: "7 cards",
+        stackLabel: "Penalty stacking",
+        stackOn: "On — +2 on +2",
+        stackOff: "Off",
+        customLabel: "Special cards",
+        customOn: "On — Mirror, Swap, Fog",
+        customOff: "Off",
+        soloCta: "Solo play vs bots",
       },
       sher: {
         lobbyHint:

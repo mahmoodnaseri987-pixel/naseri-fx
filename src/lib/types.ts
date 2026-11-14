@@ -239,6 +239,9 @@ export type SherViewType = import("@/lib/sher-shared").SherView;
 /* بازی «صحنه‌گردان» — واژهٔ مخفی فقط برای کارگردان دور در فاز چیدمان می‌آید */
 export type PcViewType = import("@/lib/proverb-shared").PcView;
 
+/* نمای «رنگ‌باز» — میز کارتی نئونی (تکی و آنلاین) */
+export type RbViewType = import("@/lib/rangbaz-shared").RbView;
+
 export type ArenaStateResponse = {
   now: number;
   me: string;
@@ -261,6 +264,7 @@ export type ArenaStateResponse = {
   ludo: LudoViewType | null;
   sher: SherViewType | null;
   proverb: PcViewType | null;
+  rangbaz: RbViewType | null;
 };
 
 /* ---------- چت (لابی عمومی و داخل اتاق) ---------- */

@@ -34,6 +34,8 @@ import { SHER_GAME_SLUG, parseSherState, type SherRoomState } from "@/lib/sher-s
 import { buildSherView, sherTick } from "@/lib/sher-engine";
 import { PC_GAME_SLUG, type PcRoomState } from "@/lib/proverb-shared";
 import { buildPcView, parsePcState, pcTick } from "@/lib/proverb-engine";
+import { RB_GAME_SLUG, rbParseState, type RbState } from "@/lib/rangbaz-shared";
+import { buildRbView, rbTick } from "@/lib/rangbaz-engine";
 import {
   buildJadvalResult,
   buildJadvalView,
@@ -250,6 +252,21 @@ export async function persistPcState(roomId: string, pcState: PcRoomState): Prom
       UPDATE "Room" SET state = ${json}, "lastActivity" = now()
       WHERE id = ${roomId} AND status = 'playing'
         AND COALESCE(NULLIF(state, '')::jsonb ->> 'seq', '0')::double precision < ${pcState.seq}`;
+    return n > 0;
+  } catch {
+    return false;
+  }
+}
+
+/** ذخیرهٔ وضعیت «رنگ‌باز» — با شمارهٔ ترتیبی برای جلوگیری از بازنویسی هم‌زمان */
+export async function persistRbState(roomId: string, rbState: RbState): Promise<boolean> {
+  rbState.seq += 1;
+  const json = JSON.stringify(rbState);
+  try {
+    const n = await db.$executeRaw`
+      UPDATE "Room" SET state = ${json}, "lastActivity" = now()
+      WHERE id = ${roomId} AND status = 'playing'
+        AND COALESCE(NULLIF(state, '')::jsonb ->> 'seq', '0')::double precision < ${rbState.seq}`;
     return n > 0;
   } catch {
     return false;
@@ -639,10 +656,37 @@ async function buildSnapshot(code: string): Promise<RoomSnapshot | null> {
     }
   }
 
+  /* «رنگ‌باز»: تیک خودکار — تایم‌اوت نوبت، انقضای پنجرهٔ لو دادن و مه */
+  const isRb = room.gameSlug === RB_GAME_SLUG;
+  let rbState: RbState | null = null;
+  if (isRb && (status === "playing" || status === "finished")) {
+    rbState = rbParseState(room.state);
+  }
+  if (isRb && status === "playing" && rbState) {
+    const tick = rbTick(rbState, { now: Date.now() });
+    if (tick.mutated) {
+      room.state = JSON.stringify(rbState);
+      await persistRbState(room.id, rbState);
+    }
+    if (rbState.result) {
+      await db.room.update({
+        where: { id: room.id },
+        data: { status: "finished", state: JSON.stringify(rbState), lastActivity: new Date() },
+      });
+      for (const row of rbState.result.rows) {
+        await db.roomMember.updateMany({
+          where: { roomId: room.id, memberId: row.id },
+          data: { score: row.score },
+        });
+      }
+      status = "finished";
+    }
+  }
+
   /* اگر مسابقه کوییز زمانش تمام شده، وضعیت را در دیتابیس قطعی کن
      (بازی‌های با وضعیت اختصاصی مستثنا هستند) */
   if (
-    !isNabard && !isFire && !isJadval && !isPic && !isLudo && !isSher && !isPc &&
+    !isNabard && !isFire && !isJadval && !isPic && !isLudo && !isSher && !isPc && !isRb &&
     status === "playing" &&
     computePhase(state.startedAtMs, now).status === "finished"
   ) {
@@ -953,6 +997,21 @@ export function viewFromSnapshot(
     }
   }
 
+  /* نمای «رنگ‌باز» — دست من و کارت رو پشته؛ تعداد بقیه با مه پنهان می‌شود */
+  let rangbaz: import("@/lib/rangbaz-shared").RbView | null = null;
+  if (room.gameSlug === RB_GAME_SLUG && (room.status === "playing" || room.status === "finished")) {
+    const rb = rbParseState(snap.rawState);
+    if (rb) {
+      const rbMembers = snap.members.map((m) => ({
+        id: m.id,
+        name: m.name,
+        bot: isBotId(m.id),
+        online: isBotId(m.id) || m.lastSeenMs >= onlineCutoff,
+      }));
+      rangbaz = buildRbView(rb, memberId, rbMembers, now);
+    }
+  }
+
   return {
     now,
     me: memberId,
@@ -975,6 +1034,7 @@ export function viewFromSnapshot(
     ludo,
     sher,
     proverb,
+    rangbaz,
   };
 }
 

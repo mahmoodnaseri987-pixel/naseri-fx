@@ -71,6 +71,12 @@ export default async function RecordsPage() {
       titleEn: "Fire Arena (solo)",
       icon: "flame",
     },
+    {
+      slug: "rangbaz-solo",
+      titleFa: "رنگ‌باز (تک‌نفره)",
+      titleEn: "Rangbaz (solo)",
+      icon: "grid",
+    },
     ...uploaded.map((g) => ({
       slug: g.slug,
       titleFa: g.titleFa,

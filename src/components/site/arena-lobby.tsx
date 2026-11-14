@@ -45,6 +45,7 @@ import {
 } from "@/lib/game-slugs";
 import { SHER_CATEGORIES, SHER_GAME_SLUG, type SherCategory } from "@/lib/sher-shared";
 import { PC_GAME_SLUG, PC_MODES, type PcMode } from "@/lib/proverb-shared";
+import { RB_GAME_SLUG } from "@/lib/rangbaz-shared";
 import type { ArenaGameConfigView, ArenaRoomSummary, MemberInfo } from "@/lib/types";
 
 /* کارت ویژهٔ «میدان آتش آفلاین» که از پنل هم قابل حذف است */
@@ -76,6 +77,9 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
   const [sherMode, setSherMode] = useState(false); // جدول: حالت شرح‌در‌متن
   const [pcMode, setPcMode] = useState<PcMode>("classic"); // ضرب‌المثل‌چین: حالت بازی
   const [pcTeams, setPcTeams] = useState<2 | 4>(2); // رقابتی: تعداد تیم‌ها
+  const [rbHand, setRbHand] = useState<5 | 7>(7); // رنگ‌باز: کارت شروع
+  const [rbStack, setRbStack] = useState(true); // رنگ‌باز: جمع‌شدن جریمه
+  const [rbCustom, setRbCustom] = useState(true); // رنگ‌باز: کارت‌های اختصاصی
 
   /* ظرفیت مجاز بازی انتخابی — منچ حداکثر ۴ نفر (چهار رنگ) */
   const capacityMax = gameSlug === LUDO_GAME_SLUG ? LUDO_MAX_PLAYERS : MAX_PLAYERS;
@@ -152,6 +156,9 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
           jadvalSher: sherMode, // جدول: حالت شرح‌در‌متن
           pcMode, // ضرب‌المثل‌چین: حالت بازی
           pcTeams, // رقابتی: ۲ یا ۴ تیم
+          rbHand, // رنگ‌باز: کارت شروع
+          rbStack, // رنگ‌باز: جمع‌شدن جریمه
+          rbCustom, // رنگ‌باز: کارت‌های اختصاصی
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -227,6 +234,7 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
       { slug: LUDO_GAME_SLUG, title: a.gameLudo, desc: a.gameLudoDesc, icon: "dice" },
       { slug: SHER_GAME_SLUG, title: a.gameSher, desc: a.gameSherDesc, icon: "music" },
       { slug: PC_GAME_SLUG, title: a.gameProverb, desc: a.gameProverbDesc, icon: "grid" },
+      { slug: RB_GAME_SLUG, title: a.gameRangbaz, desc: a.gameRangbazDesc, icon: "grid" },
     ];
     if (!gamesCfg) return all;
     const order = new Map(gamesCfg.map((g, i) => [g.slug, i]));
@@ -531,6 +539,77 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
                     {pcMode === "race" ? a.pc.rulesRace : pcMode === "banned" ? a.pc.rulesBanned : pcMode === "incomplete" ? a.pc.rulesIncomplete : pcMode === "pro" ? a.pc.rulesPro : a.pc.rulesClassic}
                   </p>
                 </details>
+              </div>
+            )}
+
+            {/* رنگ‌باز — تنظیمات میز: کارت شروع، جمع جریمه، کارت‌های اختصاصی */}
+            {gameSlug === RB_GAME_SLUG && (
+              <div className="mt-4">
+                <p className="text-xs font-bold text-zinc-400">{a.rb.handLabel}</p>
+                <div className="mt-2 flex gap-1.5" role="radiogroup" aria-label={a.rb.handLabel}>
+                  {([5, 7] as const).map((h) => (
+                    <button
+                      key={h}
+                      type="button"
+                      role="radio"
+                      aria-checked={rbHand === h}
+                      onClick={() => setRbHand(h)}
+                      className={`rounded-xl border px-3 py-2 text-[11px] font-bold transition-colors ${
+                        rbHand === h
+                          ? "border-violet-500/60 bg-violet-500/10 text-violet-200"
+                          : "border-zinc-800 bg-zinc-950/40 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
+                      }`}
+                    >
+                      {h === 5 ? a.rb.hand5 : a.rb.hand7}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-3 text-xs font-bold text-zinc-400">{a.rb.stackLabel}</p>
+                <div className="mt-2 flex gap-1.5" role="radiogroup" aria-label={a.rb.stackLabel}>
+                  {[true, false].map((v) => (
+                    <button
+                      key={String(v)}
+                      type="button"
+                      role="radio"
+                      aria-checked={rbStack === v}
+                      onClick={() => setRbStack(v)}
+                      className={`rounded-xl border px-3 py-2 text-[11px] font-bold transition-colors ${
+                        rbStack === v
+                          ? "border-violet-500/60 bg-violet-500/10 text-violet-200"
+                          : "border-zinc-800 bg-zinc-950/40 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
+                      }`}
+                    >
+                      {v ? a.rb.stackOn : a.rb.stackOff}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-3 text-xs font-bold text-zinc-400">{a.rb.customLabel}</p>
+                <div className="mt-2 flex gap-1.5" role="radiogroup" aria-label={a.rb.customLabel}>
+                  {[true, false].map((v) => (
+                    <button
+                      key={String(v)}
+                      type="button"
+                      role="radio"
+                      aria-checked={rbCustom === v}
+                      onClick={() => setRbCustom(v)}
+                      className={`rounded-xl border px-3 py-2 text-[11px] font-bold transition-colors ${
+                        rbCustom === v
+                          ? "border-violet-500/60 bg-violet-500/10 text-violet-200"
+                          : "border-zinc-800 bg-zinc-950/40 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
+                      }`}
+                    >
+                      {v ? a.rb.customOn : a.rb.customOff}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-3 text-[11px] leading-5 text-zinc-400">{a.rb.lobbyHint}</p>
+                <button
+                  type="button"
+                  onClick={() => router.push("/rangbaz")}
+                  className="mt-3 w-full rounded-xl border border-violet-500/50 bg-violet-500/10 px-3 py-2.5 text-[11px] font-black text-violet-200 hover:bg-violet-500/20"
+                >
+                  🎮 {a.rb.soloCta}
+                </button>
               </div>
             )}
 
