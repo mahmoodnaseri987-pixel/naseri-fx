@@ -283,20 +283,25 @@ export function RangbazSolo() {
   if (mode === "menu" || !view) {
     const dailyToday = stats.dailyKey === String(dailySeed());
     return (
-      <div className="relative mx-auto min-h-[100svh] w-full max-w-xl px-4 py-8 sm:px-6" dir="rtl">
+      <div
+        className="relative mx-auto min-h-[100svh] w-full max-w-xl px-4 py-8 sm:px-6"
+        dir="rtl"
+        style={{ background: "#05050d" }}
+      >
         <style dangerouslySetInnerHTML={{ __html: RB_MENU_CSS }} />
 
-        {/* سالن نئونی */}
-        <div className="pointer-events-none absolute inset-0 -z-30" style={{ background: "#05050d" }} />
+        {/* سالن نئونی — درون stacking context صفحه */}
         <div
-          className="pointer-events-none absolute -left-1/4 -top-1/3 -z-20 h-[130%] w-[150%]"
+          className="pointer-events-none absolute -left-1/4 -top-1/3 z-0 h-[130%] w-[150%]"
           style={{ background: "radial-gradient(closest-side, rgba(139,92,246,.18), transparent 70%)", animation: "rbAuroraA 14s ease-in-out infinite" }}
         />
         <div
-          className="pointer-events-none absolute -left-1/4 -top-1/3 -z-20 h-[130%] w-[150%]"
+          className="pointer-events-none absolute -left-1/4 -top-1/3 z-0 h-[130%] w-[150%]"
           style={{ background: "radial-gradient(closest-side, rgba(56,189,248,.12), transparent 72%), radial-gradient(closest-side, rgba(236,72,153,.08), transparent 72%)", animation: "rbAuroraB 18s ease-in-out infinite" }}
         />
 
+        {/* محتوای منو */}
+        <div className="relative z-10">
         {/* هیرو */}
         <div className="relative pt-4 text-center">
           <div className="mx-auto flex h-[110px] w-[230px] items-center justify-center">
@@ -490,6 +495,7 @@ export function RangbazSolo() {
           <Link href="/records" className="text-xs font-bold text-zinc-500 hover:text-zinc-300">
             🏆 {fa ? "تالار رکوردها" : "records hall"}
           </Link>
+        </div>
         </div>
       </div>
     );

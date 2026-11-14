@@ -132,6 +132,7 @@ export function RbCardArt({ card, size = 1 }: { card: RbCard; size?: number }) {
       </span>
     ) : card.k === "draw2" ? (
       <span
+        dir="ltr"
         className="font-black leading-none"
         style={{ fontSize: 30 * size, color: hex, textShadow: `${2 * size}px ${2 * size}px 0 rgba(10,10,22,.3)`, transform: "skewX(-6deg)" }}
       >
@@ -139,6 +140,7 @@ export function RbCardArt({ card, size = 1 }: { card: RbCard; size?: number }) {
       </span>
     ) : card.k === "wild4" ? (
       <span
+        dir="ltr"
         className="font-black leading-none"
         style={{ fontSize: 26 * size, color: "#111827", textShadow: "1.5px 1.5px 0 rgba(255,255,255,.6)" }}
       >
@@ -205,12 +207,14 @@ export function RbCardArt({ card, size = 1 }: { card: RbCard; size?: number }) {
       <span className="absolute inset-0 flex items-center justify-center">{center}</span>
       {/* برچسب گوشه‌ها */}
       <span
+        dir="ltr"
         className="absolute left-1 top-0.5 font-black text-white"
         style={{ fontSize: 12 * size, textShadow: "1px 1px 0 rgba(10,10,22,.4)" }}
       >
         {cornerLabel}
       </span>
       <span
+        dir="ltr"
         className="absolute bottom-0.5 right-1 font-black text-white"
         style={{ fontSize: 12 * size, textShadow: "1px 1px 0 rgba(10,10,22,.4)", transform: "rotate(180deg)" }}
       >
@@ -513,13 +517,16 @@ export function RangbazTable({ view, fa, busy, onPlay, onDrawPass, onCall, onCat
   })();
 
   return (
-    <div className="relative mx-auto min-h-[100svh] w-full max-w-3xl overflow-hidden px-3 pb-8 pt-4 sm:px-6" dir="rtl">
+    <div
+      className="relative mx-auto min-h-[100svh] w-full max-w-3xl overflow-hidden px-3 pb-8 pt-4 sm:px-6"
+      dir="rtl"
+      style={{ background: "#05050d" }}
+    >
       <style dangerouslySetInnerHTML={{ __html: RB_TABLE_CSS }} />
 
-      {/* سالن نئونی — شفق قطبی به‌رنگ فعال میز */}
-      <div className="pointer-events-none absolute inset-0 -z-30" style={{ background: "#05050d" }} />
+      {/* سالن نئونی — شفق قطبی به‌رنگ فعال میز (درون stacking context صفحه) */}
       <div
-        className="pointer-events-none absolute -left-1/4 -top-1/3 -z-20 h-[130%] w-[150%]"
+        className="pointer-events-none absolute -left-1/4 -top-1/3 z-0 h-[130%] w-[150%]"
         style={{
           background: `radial-gradient(closest-side, rgba(${colorMeta.glow},.16), transparent 70%)`,
           animation: "rbAuroraA 14s ease-in-out infinite",
@@ -527,14 +534,14 @@ export function RangbazTable({ view, fa, busy, onPlay, onDrawPass, onCall, onCat
         }}
       />
       <div
-        className="pointer-events-none absolute -left-1/4 -top-1/3 -z-20 h-[130%] w-[150%]"
+        className="pointer-events-none absolute -left-1/4 -top-1/3 z-0 h-[130%] w-[150%]"
         style={{
           background:
             "radial-gradient(closest-side, rgba(99,102,241,.14), transparent 70%), radial-gradient(closest-side, rgba(168,85,247,.1), transparent 72%)",
           animation: "rbAuroraB 18s ease-in-out infinite",
         }}
       />
-      <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+      <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
         {particles.map((p, i) => (
           <span
             key={i}
@@ -553,10 +560,12 @@ export function RangbazTable({ view, fa, busy, onPlay, onDrawPass, onCall, onCat
         ))}
       </div>
       <div
-        className="pointer-events-none absolute inset-0 -z-10"
+        className="pointer-events-none absolute inset-0 z-0"
         style={{ background: "radial-gradient(120% 90% at 50% 40%, transparent 55%, rgba(2,2,8,.75) 100%)" }}
       />
 
+      {/* محتوای میز — بالای لایه‌های پس‌زمینه */}
+      <div className="relative z-10">
       {header}
 
       {/* صندلی حریف‌ها */}
@@ -845,6 +854,7 @@ export function RangbazTable({ view, fa, busy, onPlay, onDrawPass, onCall, onCat
       </div>
 
       {footer}
+      </div>
 
       {/* مودال انتخاب رنگ */}
       {colorPick && (
