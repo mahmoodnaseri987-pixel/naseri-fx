@@ -17,6 +17,9 @@ const isIos = () =>
 const isAndroid = () =>
   typeof navigator !== "undefined" && /android/i.test(navigator.userAgent);
 
+const isWindows = () =>
+  typeof navigator !== "undefined" && /windows/i.test(navigator.userAgent);
+
 /* بخش «دانلود اپ» — نصب کافه به‌عنوان اپ روی گوشی/کامپیوتر (PWA).
    اگر مرورگر پنجرهٔ نصب بدهد همان لحظه نصب می‌شود؛ وگرنه راهنمای گام‌به‌گام
    بر اساس دستگاه کاربر باز می‌شود. */
@@ -70,9 +73,11 @@ export function AppInstall() {
             "«افزودن به صفحهٔ اصلی» را انتخاب و تأیید کن",
           ]
         : [
-            "آیکون نصب (مانیتور با فلش) کنار نوار آدرس کروم/ادج را بزن",
-            "یا از منوی سه‌نقطه گزینهٔ «Install» را انتخاب کن",
-            "کافه به‌صورت یک اپ مستقل باز می‌شود",
+            "روی دکمهٔ «دانلود اپ کافه» بزن — پنجرهٔ نصب باز می‌شود",
+            "اگر باز نشد: در کروم یا ادج منوی سه‌نقطه را باز کن و گزینهٔ «Install / نصب» را بزن",
+            isWindows()
+              ? "میان‌بر کافه در منوی استارت و دسکتاپ می‌نشیند و در پنجرهٔ مستقل خودش باز می‌شود"
+              : "کافه به‌صورت یک اپ مستقل با آیکون اختصاصی باز می‌شود",
           ]
     : isIos()
       ? [
@@ -80,11 +85,19 @@ export function AppInstall() {
           'Choose "Add to Home Screen" from the list',
           "Confirm the name and tap Add",
         ]
-      : [
-          'Tap "Download the app" — the install dialog opens',
-          "If it did not open: open the three-dot menu in Chrome",
-          'Choose "Add to Home screen" and confirm',
-        ];
+      : isAndroid()
+        ? [
+            'Tap "Download the app" — the install dialog opens',
+            "If it did not open: open the three-dot menu in Chrome",
+            'Choose "Add to Home screen" and confirm',
+          ]
+        : [
+            'Tap "Download the app" — the install dialog opens',
+            "If it did not open: in Chrome or Edge, three-dot menu → Install",
+            isWindows()
+              ? "A Kafe shortcut lands in your Start menu and desktop, opening in its own window"
+              : "Kafe opens as a standalone app with its own icon",
+          ];
 
   return (
     <section id="install" className="scroll-mt-20 py-20 sm:py-28">
@@ -98,8 +111,8 @@ export function AppInstall() {
           </h2>
           <p className="mx-auto mt-4 max-w-2xl text-base leading-8 text-zinc-400">
             {fa
-              ? "بدون دانلود از بازار و بدون نصب سنگین — همان صفحهٔ اصلی باز می‌شود و کافه مثل یک اپ واقعی، با آیکون اختصاصی روی گوشی یا کامپیوترت می‌نشیند."
-              : "No store download, no heavy install — the site itself becomes a real app with its own icon on your phone or desktop."}
+              ? "بدون دانلود از فروشگاه و بدون نصب سنگین — هم روی گوشی (اندروید و iOS) و هم روی ویندوز و مک، کافه مثل یک اپ واقعی با آیکون اختصاصی نصب می‌شود و آپدیت‌اش خودکار است."
+              : "No store download, no heavy install — on Android, iOS, Windows and macOS, Kafe installs like a real app with its own icon, and updates automatically."}
           </p>
 
           {installed ? (
