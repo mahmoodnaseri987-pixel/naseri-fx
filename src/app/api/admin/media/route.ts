@@ -5,7 +5,7 @@ import { ensureSetup } from "@/lib/public-data";
 
 /* سقف حجم فایل‌ها (بایت) — متناسب با محدودیت بدنه درخواست Vercel */
 export const MAX_IMAGE_BYTES = 2.5 * 1024 * 1024; // ۲٫۵ مگابایت
-export const MAX_VIDEO_BYTES = 3 * 1024 * 1024; // ۳ مگابایت
+export const MAX_VIDEO_BYTES = 10 * 1024 * 1024; // ۱۰ مگابایت — فایل‌های بزرگ تکه‌تکه در /api/admin/media/chunk
 
 const ALLOWED_IMAGE = /^image\/(png|jpe?g|webp|gif|svg\+xml|avif)$/;
 const ALLOWED_VIDEO = /^video\/(mp4|webm|quicktime)$/;
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
       {
         error: isImage
           ? "حجم تصویر بیش از حد مجاز است (حداکثر ۲٫۵ مگابایت)."
-          : "حجم ویدیو بیش از حد مجاز است (حداکثر ۳ مگابایت). برای ویدیوهای بلندتر، لینک آپارات را در بخش موشن گرافیک وارد کنید.",
+          : "حجم ویدیو بیش از حد مجاز است (حداکثر ۱۰ مگابایت).",
       },
       { status: 413 },
     );

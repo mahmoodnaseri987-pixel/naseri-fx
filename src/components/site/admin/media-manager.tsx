@@ -24,7 +24,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { formatBytes, prepareFile } from "@/lib/upload-client";
+import { formatBytes, uploadMedia } from "@/lib/upload-client";
 import type { MediaMeta } from "@/lib/types";
 
 export function useMediaList() {
@@ -32,6 +32,7 @@ export function useMediaList() {
   const [media, setMedia] = useState<MediaMeta[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState(0);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const load = useCallback(async () => {
@@ -55,21 +56,10 @@ export function useMediaList() {
     async (file: File): Promise<MediaMeta | null> => {
       setUploading(true);
       try {
-        const prepared = await prepareFile(file);
-        const res = await fetch("/api/admin/media", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: prepared.name,
-            mime: prepared.mime,
-            dataUrl: prepared.dataUrl,
-          }),
-        });
-        const data = await res.json().catch(() => null);
-        if (!res.ok) throw new Error(data?.error ?? "آپلود ناموفق بود.");
+        const media = await uploadMedia(file, (pct) => setProgress(pct));
         await load();
-        toast({ title: `«${prepared.name}» آپلود شد.` });
-        return data.media as MediaMeta;
+        toast({ title: `«${media.name}» آپلود شد.` });
+        return media as MediaMeta;
       } catch (err) {
         toast({
           title: err instanceof Error ? err.message : "آپلود ناموفق بود.",
@@ -77,6 +67,7 @@ export function useMediaList() {
         });
         return null;
       } finally {
+        setProgress(0);
         setUploading(false);
       }
     },
@@ -97,7 +88,7 @@ export function useMediaList() {
     [toast],
   );
 
-  return { media, loading, uploading, upload, remove, load, inputRef };
+  return { media, loading, uploading, progress, upload, remove, load, inputRef };
 }
 
 export function UploadButton({
@@ -251,7 +242,7 @@ export function MediaGrid({ media, loading, onRefresh, onDelete, onSelect, empty
 
 /* --- مدیریت کامل کتابخانه رسانه (تب رسانه‌ها) --- */
 export function MediaManager() {
-  const { media, loading, uploading, upload, remove, load } = useMediaList();
+  const { media, loading, uploading, progress, upload, remove, load } = useMediaList();
   const { toast } = useToast();
   const [deleting, setDeleting] = useState<MediaMeta | null>(null);
   const [deletingBusy, setDeletingBusy] = useState(false);
@@ -273,7 +264,7 @@ export function MediaManager() {
           <h3 className="text-base font-bold text-zinc-100">کتابخانه رسانه</h3>
           <p className="mt-1 text-xs leading-5 text-zinc-500">
             {media.length} فایل — مجموع {formatBytes(totalBytes)} از سقف استفاده پیشنهادی ۲۰
-            مگابایت. تصویر تا ۲٫۵ و ویدیو تا ۳ مگابایت.
+            مگابایت. تصویر تا ۲٫۵ و ویدیو تا ۱۰ مگابایت.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -288,6 +279,9 @@ export function MediaManager() {
             <RefreshCw className="h-4 w-4" aria-hidden="true" />
           </Button>
           <UploadButton onPick={(file) => upload(file)} uploading={uploading} label="آپلود عکس / ویدیو" />
+          {uploading && progress > 0 && (
+            <span className="text-xs font-black tabular-nums text-zinc-400">{progress}٪</span>
+          )}
         </div>
       </div>
 

@@ -237,7 +237,6 @@ export type LudoViewType = import("@/lib/ludo-shared").LudoView;
 export type SherViewType = import("@/lib/sher-shared").SherView;
 
 /* بازی «صحنه‌گردان» — واژهٔ مخفی فقط برای کارگردان دور در فاز چیدمان می‌آید */
-export type SceneViewType = import("@/lib/scene-shared").SceneView;
 export type PcViewType = import("@/lib/proverb-shared").PcView;
 
 export type ArenaStateResponse = {
@@ -261,7 +260,6 @@ export type ArenaStateResponse = {
   pic: PicViewType | null;
   ludo: LudoViewType | null;
   sher: SherViewType | null;
-  scene: SceneViewType | null;
   proverb: PcViewType | null;
 };
 

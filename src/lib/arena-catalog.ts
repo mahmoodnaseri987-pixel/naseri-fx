@@ -14,7 +14,6 @@ import { JADVAL_GAME_SLUG } from "@/lib/jadval-shared";
 import { PIC_GAME_SLUG } from "@/lib/pic-shared";
 import { LUDO_GAME_SLUG } from "@/lib/ludo-shared";
 import { SHER_GAME_SLUG } from "@/lib/sher-shared";
-import { SCENE_GAME_SLUG } from "@/lib/scene-shared";
 import { PC_GAME_SLUG } from "@/lib/proverb-shared";
 
 export type CatalogGameKind = "room" | "banner"; // banner = کارت ویژهٔ لابی (آتش آفلاین)
@@ -86,15 +85,6 @@ export const ARENA_CATALOG_DEFS: Omit<CatalogGame, "enabled" | "sortOrder">[] = 
     descFa: "کلیپ آهنگ قطع می‌شود — بیت بعدی را سریع‌تر از بقیه حدس بزن",
     descEn: "The clip cuts mid-song — guess the next line before the others",
     icon: "music",
-  },
-  {
-    slug: SCENE_GAME_SLUG,
-    kind: "room",
-    titleFa: "صحنه‌گردان",
-    titleEn: "Scene Director",
-    descFa: "پانتومیم کارتی بدون دوربین — با کارت‌ها صحنه بچین و بگذار حدس بزنند",
-    descEn: "Card-based pantomime, no camera — build the scene, let them guess",
-    icon: "shapes",
   },
   {
     slug: PC_GAME_SLUG,

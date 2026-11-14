@@ -32,9 +32,7 @@ import {
 } from "@/lib/ludo-engine";
 import { SHER_GAME_SLUG, parseSherState, type SherRoomState } from "@/lib/sher-shared";
 import { buildSherView, sherTick } from "@/lib/sher-engine";
-import { SCENE_GAME_SLUG, type SceneRoomState } from "@/lib/scene-shared";
 import { PC_GAME_SLUG, type PcRoomState } from "@/lib/proverb-shared";
-import { buildSceneView, parseSceneState, sceneTick } from "@/lib/scene-engine";
 import { buildPcView, parsePcState, pcTick } from "@/lib/proverb-engine";
 import {
   buildJadvalResult,
@@ -242,44 +240,6 @@ export async function settleSher(roomId: string, sState: SherRoomState): Promise
 }
 
 /* ================================================================
-   ذخیرهٔ وضعیت «صحنه‌گردان» — با گارد «فقط رو به جلو» روی seq
-   ================================================================ */
-
-export async function persistSceneState(roomId: string, scState: SceneRoomState): Promise<boolean> {
-  const json = JSON.stringify(scState);
-  try {
-    const n = await db.$executeRaw`
-      UPDATE "Room" SET state = ${json}, "lastActivity" = now()
-      WHERE id = ${roomId} AND status = 'playing'
-        AND COALESCE(NULLIF(state, '')::jsonb ->> 'seq', '0')::double precision < ${scState.seq}`;
-    return n > 0;
-  } catch {
-    return false;
-  }
-}
-
-/** تسویهٔ نهایی «صحنه‌گردان» — امتیاز مسابقهٔ هر عضو + بستن اتاق؛ فقط یک‌بار */
-export async function settleScene(roomId: string, scState: SceneRoomState): Promise<void> {
-  if (!scState.result) return;
-  try {
-    await db.$transaction(async (tx) => {
-      const n = await tx.$executeRaw`
-        UPDATE "Room" SET status = 'finished', state = ${JSON.stringify(scState)}, "lastActivity" = now()
-        WHERE id = ${roomId} AND status = 'playing'`;
-      if (n === 0) return; // نمونهٔ دیگر تسویه کرده است
-      for (const row of scState.result!.rows) {
-        await tx.roomMember.updateMany({
-          where: { roomId, memberId: row.id },
-          data: { score: row.score },
-        });
-      }
-    });
-  } catch {
-    /* خطای گذرا — اسنپ‌شات بعدی دوباره تلاش می‌کند */
-  }
-}
-
-/* ================================================================
    ذخیرهٔ وضعیت «ضرب‌المثل‌چین» — با گارد «فقط رو به جلو» روی seq
    ================================================================ */
 
@@ -398,7 +358,6 @@ async function buildSnapshot(code: string): Promise<RoomSnapshot | null> {
   const isPic = room.gameSlug === PIC_GAME_SLUG;
   const isLudo = room.gameSlug === LUDO_GAME_SLUG;
   const isSher = room.gameSlug === SHER_GAME_SLUG;
-  const isScene = room.gameSlug === SCENE_GAME_SLUG;
   const isPc = room.gameSlug === PC_GAME_SLUG;
   const state = parseState(room.state);
   const now = Date.now();
@@ -654,23 +613,6 @@ async function buildSnapshot(code: string): Promise<RoomSnapshot | null> {
     }
   }
 
-  /* «صحنه‌گردان»: تیک خودکار — گذر فازها، چیدن کارگردانِ ربات، حدس ربات‌ها و تسویه */
-  let sceneState: SceneRoomState | null = null;
-  if (isScene && (status === "playing" || status === "finished")) {
-    sceneState = parseSceneState(room.state);
-  }
-  if (isScene && status === "playing" && sceneState) {
-    const tick = sceneTick(sceneState, { now: Date.now() });
-    if (tick.mutated) {
-      room.state = JSON.stringify(sceneState);
-      await persistSceneState(room.id, sceneState);
-    }
-    if (sceneState.result) {
-      await settleScene(room.id, sceneState);
-      status = "finished";
-    }
-  }
-
   /* «ضرب‌المثل‌چین»: تیک خودکار — گذر فازها، چیدن چینش‌گرِ ربات، حدس و رأی ربات‌ها */
   let pcState: PcRoomState | null = null;
   if (isPc && (status === "playing" || status === "finished")) {
@@ -700,7 +642,7 @@ async function buildSnapshot(code: string): Promise<RoomSnapshot | null> {
   /* اگر مسابقه کوییز زمانش تمام شده، وضعیت را در دیتابیس قطعی کن
      (بازی‌های با وضعیت اختصاصی مستثنا هستند) */
   if (
-    !isNabard && !isFire && !isJadval && !isPic && !isLudo && !isSher && !isScene && !isPc &&
+    !isNabard && !isFire && !isJadval && !isPic && !isLudo && !isSher && !isPc &&
     status === "playing" &&
     computePhase(state.startedAtMs, now).status === "finished"
   ) {
@@ -747,7 +689,7 @@ async function buildSnapshot(code: string): Promise<RoomSnapshot | null> {
   let answered: Record<string, number> = {};
   let phaseKey = "";
   if (
-    !isNabard && !isFire && !isJadval && !isPic && !isLudo && !isSher && !isScene && !isPc && status === "playing"
+    !isNabard && !isFire && !isJadval && !isPic && !isLudo && !isSher && !isPc && status === "playing"
   ) {
     const phase = computePhase(state.startedAtMs, Date.now());
     if (phase.status === "playing") {
@@ -785,9 +727,6 @@ async function buildSnapshot(code: string): Promise<RoomSnapshot | null> {
   }
   if (isSher && status === "playing") {
     phaseKey = `sh:${sherState?.seq ?? 0}`;
-  }
-  if (isScene && status === "playing") {
-    phaseKey = `sc:${sceneState?.seq ?? 0}`;
   }
 
   const members: SnapMember[] = room.members.map((m) => ({
@@ -888,7 +827,6 @@ export function viewFromSnapshot(
   const isPic = room.gameSlug === PIC_GAME_SLUG;
   const isLudo = room.gameSlug === LUDO_GAME_SLUG;
   const isSher = room.gameSlug === SHER_GAME_SLUG;
-  const isScene = room.gameSlug === SCENE_GAME_SLUG;
   const isPc = room.gameSlug === PC_GAME_SLUG;
   const onlineCutoff = now - ONLINE_MS;
 
@@ -1000,21 +938,6 @@ export function viewFromSnapshot(
     }
   }
 
-  /* نمای «صحنه‌گردان» — واژهٔ مخفی فقط برای کارگردان دور جاری در فاز چیدمان */
-  let scene: import("@/lib/scene-shared").SceneView | null = null;
-  if (isScene && (room.status === "playing" || room.status === "finished")) {
-    const sc = parseSceneState(snap.rawState);
-    if (sc) {
-      const sceneMembers = snap.members.map((m) => ({
-        id: m.id,
-        name: m.name,
-        bot: isBotId(m.id),
-        online: isBotId(m.id) || m.lastSeenMs >= onlineCutoff,
-      }));
-      scene = buildSceneView(sc, memberId, sceneMembers, now);
-    }
-  }
-
   /* نمای «ضرب‌المثل‌چین» — ضرب‌المثل فقط برای چینش‌گر دور جاری در فاز چیدمان */
   let proverb: import("@/lib/proverb-shared").PcView | null = null;
   if (isPc && (room.status === "playing" || room.status === "finished")) {
@@ -1051,7 +974,6 @@ export function viewFromSnapshot(
     pic,
     ludo,
     sher,
-    scene,
     proverb,
   };
 }

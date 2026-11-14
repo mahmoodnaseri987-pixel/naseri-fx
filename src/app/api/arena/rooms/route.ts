@@ -13,7 +13,6 @@ import { JADVAL_GAME_SLUG } from "@/lib/jadval-shared";
 import { PIC_GAME_SLUG } from "@/lib/pic-shared";
 import { LUDO_GAME_SLUG } from "@/lib/ludo-shared";
 import { SHER_GAME_SLUG, isSherCategory } from "@/lib/sher-shared";
-import { SCENE_DIFFS, SCENE_GAME_SLUG, SCENE_MODES, type SceneDifficulty, type SceneMode } from "@/lib/scene-shared";
 import { PC_GAME_SLUG, PC_MODES, pcLobbyMode, type PcMode } from "@/lib/proverb-shared";
 import { getArenaGameDef } from "@/lib/arena-registry";
 import { housekeeping } from "@/lib/arena-server";
@@ -21,7 +20,7 @@ import { getArenaCatalog, isRoomGameEnabled } from "@/lib/arena-catalog";
 import type { ArenaRoomSummary } from "@/lib/types";
 
 /* «میدان آتش» آنلاین کنار گذاشته شد — نسخه آفلاین تک‌نفره در /fire سرو می‌شود */
-const GAME_SLUGS = new Set([ARENA_GAME_SLUG, NABARD_GAME_SLUG, JADVAL_GAME_SLUG, PIC_GAME_SLUG, LUDO_GAME_SLUG, SHER_GAME_SLUG, SCENE_GAME_SLUG, PC_GAME_SLUG]);
+const GAME_SLUGS = new Set([ARENA_GAME_SLUG, NABARD_GAME_SLUG, JADVAL_GAME_SLUG, PIC_GAME_SLUG, LUDO_GAME_SLUG, SHER_GAME_SLUG, PC_GAME_SLUG]);
 const MAX_ACTIVE_ROOMS = 30;
 
 export async function GET() {
@@ -150,21 +149,11 @@ export async function POST(req: NextRequest) {
           status: "lobby",
           maxPlayers,
           ageGroup, // گروه سنی اتاق روی خود اتاق — تا «مسابقه دوباره» حفظ می‌شود
-          // JSON لابی: گروه سنی + برای sher بخش آهنگ‌ها و برای جدول حالت شرح‌در‌متن و برای صحنه‌گردان حالت و سختی تا لحظهٔ شروع حفظ شود
+          // JSON لابی: گروه سنی + برای sher بخش آهنگ‌ها و برای جدول حالت شرح‌در‌متن تا لحظهٔ شروع حفظ شود
           state: JSON.stringify(
             isSherRoom
               ? { ageGroup, sherCategory }
-              : gameSlug === SCENE_GAME_SLUG
-                ? {
-                    ageGroup,
-                    sceneMode: (SCENE_MODES as readonly string[]).includes(String(body.sceneMode))
-                      ? (body.sceneMode as SceneMode)
-                      : "classic",
-                    sceneDifficulty: (SCENE_DIFFS as readonly string[]).includes(String(body.sceneDifficulty))
-                      ? (body.sceneDifficulty as SceneDifficulty)
-                      : "easy",
-                  }
-                : gameSlug === PC_GAME_SLUG
+              : gameSlug === PC_GAME_SLUG
                   ? {
                       ageGroup,
                       pcMode: (PC_MODES as readonly string[]).includes(String(body.pcMode))
