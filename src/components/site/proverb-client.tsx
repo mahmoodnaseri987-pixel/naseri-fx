@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BookOpen, Clapperboard, Clock, Crown, Eraser, Loader2, RotateCcw, Send, Undo2 } from "lucide-react";
 import { useLang } from "@/components/site/language-provider";
+import { MemberAvatar } from "@/components/site/member-avatar";
 import { subscribeStream } from "@/lib/realtime";
 import { sfxAmbientStart, sfxAmbientStop, sfxIsMuted, sfxLose, sfxToggleMuted, sfxWin } from "@/lib/arena-sfx";
 import {
@@ -995,23 +996,89 @@ export function ProverbClient({ st, offsetMs }: { st: ArenaStateResponse; offset
             </p>
           )}
 
-          {/* امتیاز زنده */}
-          <div className="overflow-hidden rounded-2xl border border-zinc-800">
-            {[...view.players]
-              .sort((x, y) => y.score - x.score)
-              .map((p) => (
-                <div
-                  key={p.id}
-                  className={`flex items-center justify-between border-b border-zinc-800 px-4 py-2 last:border-0 ${p.id === view.arrangerId ? "bg-sky-500/10" : "bg-zinc-950/60"}`}
-                >
-                  <span className="text-sm font-bold text-zinc-200">
-                    {p.id === view.arrangerId ? "🎬 " : ""}
-                    {p.name}
-                  </span>
-                  <span className="text-sm font-black tabular-nums text-amber-300">{p.score}</span>
-                </div>
-              ))}
-          </div>
+          {/* امتیاز زنده — در حالت رقابتی تیمی، بازیکنان زیر پرچم تیمشان با آواتار */}
+          {isRace && view.teams ? (
+            <div className="space-y-3">
+              {view.teams.map((tm) => {
+                const rows = [...view.players]
+                  .filter((p) => tm.memberIds.includes(p.id))
+                  .sort((x, y) => y.score - x.score);
+                const isActive = tm.id === view.activeTeamId;
+                const isMine = tm.memberIds.includes(me);
+                return (
+                  <div
+                    key={tm.id}
+                    className="overflow-hidden rounded-2xl border"
+                    style={{ borderColor: tm.color, ...(isActive ? { boxShadow: `0 0 0 2px ${tm.color}55` } : {}) }}
+                  >
+                    <div
+                      className="flex items-center justify-between gap-2 px-4 py-2.5"
+                      style={{ background: `${tm.color}1f` }}
+                    >
+                      <span className="flex items-center gap-2 text-sm font-black" style={{ color: tm.color }}>
+                        <span className="inline-block size-2.5 rounded-full" style={{ background: tm.color }} />
+                        {tm.name}
+                        {isMine && (
+                          <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-300">
+                            {fa ? "تیم شما" : "Your team"}
+                          </span>
+                        )}
+                      </span>
+                      <span className="flex items-center gap-2">
+                        {isActive && (
+                          <span
+                            className="rounded-full px-2.5 py-0.5 text-[10px] font-black text-zinc-950"
+                            style={{ background: tm.color }}
+                          >
+                            {fa ? "نوبت این تیم" : "On turn"}
+                          </span>
+                        )}
+                        <span className="text-sm font-black tabular-nums text-amber-300">{tm.score}</span>
+                      </span>
+                    </div>
+                    {rows.map((p) => (
+                      <div
+                        key={p.id}
+                        className={`flex items-center gap-2.5 border-t px-3.5 py-2 ${p.id === me ? "bg-zinc-800/50" : "bg-zinc-950/60"}`}
+                        style={{ borderColor: `${tm.color}2e` }}
+                      >
+                        <MemberAvatar memberId={p.id} name={p.name} size={28} />
+                        <span className="min-w-0 flex-1 truncate text-sm font-bold text-zinc-200">
+                          {p.id === view.arrangerId ? "🎬 " : ""}
+                          {p.name}
+                          {p.id === me && (
+                            <span className="ms-1 text-[10px] font-bold text-emerald-400">{fa ? "(شما)" : "(you)"}</span>
+                          )}
+                        </span>
+                        <span className="text-sm font-black tabular-nums text-amber-300">{p.score}</span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="overflow-hidden rounded-2xl border border-zinc-800">
+              {[...view.players]
+                .sort((x, y) => y.score - x.score)
+                .map((p) => (
+                  <div
+                    key={p.id}
+                    className={`flex items-center gap-2.5 border-b border-zinc-800 px-4 py-2 last:border-0 ${p.id === view.arrangerId ? "bg-sky-500/10" : "bg-zinc-950/60"}`}
+                  >
+                    <MemberAvatar memberId={p.id} name={p.name} size={28} />
+                    <span className="min-w-0 flex-1 truncate text-sm font-bold text-zinc-200">
+                      {p.id === view.arrangerId ? "🎬 " : ""}
+                      {p.name}
+                      {p.id === me && (
+                        <span className="ms-1 text-[10px] font-bold text-emerald-400">{fa ? "(شما)" : "(you)"}</span>
+                      )}
+                    </span>
+                    <span className="text-sm font-black tabular-nums text-amber-300">{p.score}</span>
+                  </div>
+                ))}
+            </div>
+          )}
         </div>
       )}
 

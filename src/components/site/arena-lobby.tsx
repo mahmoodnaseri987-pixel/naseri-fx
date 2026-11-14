@@ -5,6 +5,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   BookOpenText,
   Camera,
@@ -22,6 +23,7 @@ import {
   RefreshCw,
   Shapes,
   Swords,
+  Trophy,
   Users,
   Zap,
 } from "lucide-react";
@@ -255,6 +257,15 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-20">
+      <div className="mb-6 flex justify-start">
+        <Link
+          href="/records"
+          className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-700 bg-zinc-900/60 px-3.5 py-2 text-xs font-bold text-zinc-300 transition-colors hover:border-amber-400/60 hover:text-amber-300"
+        >
+          <Trophy className="h-4 w-4" aria-hidden="true" />
+          {lang === "fa" ? "رکوردها" : "Records"}
+        </Link>
+      </div>
       <div className="text-center">
         <span className="inline-flex items-center gap-2 text-sm font-semibold text-violet-400">
           <Swords className="h-4 w-4" aria-hidden="true" />
