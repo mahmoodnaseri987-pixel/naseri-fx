@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+
 import { useEffect, useState } from "react";
 import { Menu, Terminal } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -70,10 +72,11 @@ export function SiteHeader({ logoUrl }: SiteHeaderProps) {
   ];
 
   const LogoMark = logoUrl ? (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
+    <Image
       src={logoUrl}
       alt={t.brand}
+      width={72}
+      height={72}
       className="h-9 w-9 rounded-xl border border-zinc-800 object-contain"
     />
   ) : (
@@ -126,7 +129,7 @@ export function SiteHeader({ logoUrl }: SiteHeaderProps) {
               onClick={toggleLang}
               variant="outline"
               size="sm"
-              aria-label={lang === "fa" ? "Switch to English" : "تغییر به فارسی"}
+              aria-label={lang === "fa" ? "English (EN)" : "تغییر به فارسی (فا)"}
               className="rounded-full border-zinc-700 bg-transparent text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 hover:border-zinc-600 font-semibold"
             >
               {t.langToggle}
@@ -142,7 +145,7 @@ export function SiteHeader({ logoUrl }: SiteHeaderProps) {
               onClick={toggleLang}
               variant="outline"
               size="sm"
-              aria-label={lang === "fa" ? "Switch to English" : "تغییر به فارسی"}
+              aria-label={lang === "fa" ? "English (EN)" : "تغییر به فارسی (فا)"}
               className="rounded-full border-zinc-700 bg-transparent text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 hover:border-zinc-600 font-semibold"
             >
               {t.langToggle}

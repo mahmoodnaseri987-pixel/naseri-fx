@@ -1,7 +1,6 @@
 "use client";
 
-import { motion } from "framer-motion";
-import { ReactNode } from "react";
+import { CSSProperties, ReactNode } from "react";
 
 type FadeInProps = {
   children: ReactNode;
@@ -10,16 +9,15 @@ type FadeInProps = {
   y?: number;
 };
 
+/* محو‌شدن نرم — کاملاً CSS (بدون JS). نسخهٔ قبلی با framer-motion تا
+   hydration همه را opacity:0 نگه می‌داشت و LCP را چند ثانیه عقب می‌انداخت. */
 export function FadeIn({ children, delay = 0, className, y = 24 }: FadeInProps) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "-60px" }}
-      transition={{ duration: 0.6, delay, ease: "easeOut" }}
-      className={className}
+    <div
+      className={`fi-anim ${className ?? ""}`}
+      style={{ animationDelay: `${delay}s`, "--fi-y": `${y}px` } as CSSProperties}
     >
       {children}
-    </motion.div>
+    </div>
   );
 }

@@ -175,3 +175,13 @@ html {
     @apply bg-background text-foreground;
   }
 }
+
+/* محو‌شدن نرم CSS — جایگزین framer-motion؛ از اولین رنگ‌آمیزی دیده می‌شود */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(var(--fi-y, 24px)); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.fi-anim { animation: fadeInUp 0.6s cubic-bezier(0, 0, 0.2, 1) both; }
+@media (prefers-reduced-motion: reduce) {
+  .fi-anim { animation: none; }
+}

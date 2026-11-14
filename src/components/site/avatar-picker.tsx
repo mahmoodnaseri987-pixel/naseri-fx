@@ -278,7 +278,7 @@ export function AvatarPicker({ variant, value = "", onChange, onDone }: AvatarPi
           <button
             type="button"
             onClick={() => galleryRef.current?.click()}
-            className="inline-flex items-center gap-1.5 text-sm font-bold text-violet-300 transition hover:text-violet-200"
+            className="inline-flex min-h-[36px] items-center gap-1.5 px-2 text-sm font-bold text-violet-300 transition hover:text-violet-200"
           >
             <ImageIcon className="h-3.5 w-3.5" aria-hidden="true" />
             {a.avatarGallery}
@@ -286,13 +286,13 @@ export function AvatarPicker({ variant, value = "", onChange, onDone }: AvatarPi
           <button
             type="button"
             onClick={openCamera}
-            className="inline-flex items-center gap-1.5 text-sm font-bold text-emerald-400 transition hover:text-emerald-300"
+            className="inline-flex min-h-[36px] items-center gap-1.5 px-2 text-sm font-bold text-emerald-400 transition hover:text-emerald-300"
           >
             <Camera className="h-3.5 w-3.5" aria-hidden="true" />
             {a.avatarCamera}
           </button>
         </div>
-        <p className="mt-0.5 text-[11px] leading-5 text-zinc-500">{a.avatarHint}</p>
+        <p className="mt-0.5 text-[11px] leading-5 text-zinc-400">{a.avatarHint}</p>
         {error && <p className="mt-0.5 text-[11px] font-semibold text-rose-400">{error}</p>}
       </div>
 

@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+
 import { Terminal, Settings2 } from "lucide-react";
 import { useLang } from "@/components/site/language-provider";
 
@@ -17,10 +19,11 @@ export function SiteFooter({ logoUrl }: SiteFooterProps) {
   ];
 
   const LogoMark = logoUrl ? (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
+    <Image
       src={logoUrl}
       alt={t.brand}
+      width={64}
+      height={64}
       className="h-8 w-8 rounded-lg border border-zinc-800 object-contain"
     />
   ) : (
@@ -33,10 +36,10 @@ export function SiteFooter({ logoUrl }: SiteFooterProps) {
     <footer className="mt-auto border-t border-zinc-800/80 bg-zinc-950 pb-[env(safe-area-inset-bottom)]">
       <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
         <div className="flex flex-col items-center justify-between gap-6 sm:flex-row">
-          <a href="#top" className="flex items-center gap-2" aria-label={t.brand}>
+          <a href="#top" className="flex items-center gap-2" aria-label={`${t.brand} — ${lang === "fa" ? "محمود ناصری" : "Mahmoud Naseri"}`}>
             {LogoMark}
             <span className="font-bold text-zinc-100">{t.brand}</span>
-            <span className="font-mono text-xs text-zinc-500">
+            <span className="font-mono text-xs text-zinc-400">
               {lang === "fa" ? "/ محمود ناصری" : "/ Mahmoud Naseri"}
             </span>
           </a>
@@ -47,7 +50,7 @@ export function SiteFooter({ logoUrl }: SiteFooterProps) {
                 <li key={link.href}>
                   <a
                     href={link.href}
-                    className="text-sm text-zinc-500 hover:text-zinc-200 transition-colors"
+                    className="text-sm text-zinc-400 hover:text-zinc-200 transition-colors"
                   >
                     {link.label}
                   </a>
@@ -58,11 +61,11 @@ export function SiteFooter({ logoUrl }: SiteFooterProps) {
         </div>
 
         <div className="mt-6 flex items-center justify-center gap-4">
-          <p className="text-xs text-zinc-600">{t.footer.madeWith}</p>
+          <p className="text-xs text-zinc-400">{t.footer.madeWith}</p>
           <span aria-hidden="true" className="h-3 w-px bg-zinc-800" />
           <a
             href="/admin"
-            className="flex items-center gap-1.5 text-xs text-zinc-600 transition-colors hover:text-zinc-300"
+            className="flex items-center gap-1.5 text-xs text-zinc-400 transition-colors hover:text-zinc-300"
           >
             <Settings2 className="h-3.5 w-3.5" aria-hidden="true" />
             {t.footer.admin}
