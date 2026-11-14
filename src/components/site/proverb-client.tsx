@@ -9,7 +9,7 @@
    ================================================================ */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Clapperboard, Crown, Eraser, Loader2, Send, Undo2 } from "lucide-react";
+import { Clapperboard, Clock, Crown, Eraser, Loader2, RotateCcw, Send, Undo2 } from "lucide-react";
 import { useLang } from "@/components/site/language-provider";
 import { subscribeStream } from "@/lib/realtime";
 import { sfxAmbientStart, sfxAmbientStop, sfxIsMuted, sfxLose, sfxToggleMuted, sfxWin } from "@/lib/arena-sfx";
