@@ -720,7 +720,7 @@ export function RangbazTable({ view, fa, busy, onPlay, onDrawPass, onCall, onCat
       </div>
 
       {/* نوار اکشن */}
-      <div className="mt-7 flex flex-wrap items-center justify-center gap-2">
+      <div className="relative z-20 mt-6 flex flex-wrap items-center justify-center gap-2">
         {view.myTurn ? (
           <span
             className="rounded-full border px-3.5 py-1.5 text-xs font-black text-emerald-300"
@@ -790,14 +790,14 @@ export function RangbazTable({ view, fa, busy, onPlay, onDrawPass, onCall, onCat
       </div>
 
       {/* دست من — بادبزن */}
-      <div className="mt-4">
-        <div className="flex items-end justify-center pb-2" style={{ minHeight: 118 }}>
+      <div className="mt-7">
+        <div className="flex items-end justify-center pb-2" style={{ minHeight: 116 }}>
           {sortedHand.map((c, i) => {
             const playable = view.myTurn && view.playableIds.includes(c.id);
             const isNew = view.drew && view.drewId === c.id;
             const n = sortedHand.length;
-            const rot = (i - (n - 1) / 2) * Math.min(4, 40 / Math.max(n, 1));
-            const lift = playable ? -18 : 0;
+            const rot = (i - (n - 1) / 2) * Math.min(2.4, 26 / Math.max(n, 1));
+            const lift = playable ? -22 : 0;
             return (
               <button
                 key={c.id}
@@ -806,7 +806,7 @@ export function RangbazTable({ view, fa, busy, onPlay, onDrawPass, onCall, onCat
                 onClick={() => playCard(c.id)}
                 className="rb-cardface relative"
                 style={{
-                  marginLeft: i === 0 ? 0 : -14,
+                  marginLeft: i === 0 ? 0 : -11,
                   transform: `rotate(${rot}deg) translateY(${lift}px)`,
                   filter: playable ? "none" : "brightness(.5) saturate(.65)",
                   cursor: playable ? "pointer" : "default",
