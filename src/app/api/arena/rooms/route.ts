@@ -170,6 +170,7 @@ export async function POST(req: NextRequest) {
                       pcMode: (PC_MODES as readonly string[]).includes(String(body.pcMode))
                         ? (body.pcMode as PcMode)
                         : "classic",
+                      pcTeams: Number(body.pcTeams) === 4 ? 4 : 2,
                     }
                 : { ageGroup, jadvalSher: body.jadvalSher === true },
           ),

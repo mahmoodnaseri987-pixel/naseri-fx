@@ -94,6 +94,7 @@ import {
   PC_GAME_SLUG,
   PC_MODES,
   pcLobbyMode,
+  pcLobbyTeams,
   type PcMode,
 } from "@/lib/proverb-shared";
 import {
@@ -1275,10 +1276,15 @@ export async function POST(
         (PC_MODES as readonly string[]).includes(requested)
           ? (requested as PcMode)
           : (lobby ?? "classic");
+      /* تعداد تیم‌ها فقط برای حالت رقابتی — ۲ یا ۴؛ از بدنه یا لابی */
+      const requestedTeams = Number(body.pcTeams);
+      const lobbyTeams = pcLobbyTeams(room.state);
+      const teamsCount = requestedTeams === 4 || lobbyTeams === 4 ? 4 : 2;
       const pcState = createPcState(
         mode,
         room.members.map((m) => ({ id: m.memberId, name: m.name })),
         Date.now(),
+        teamsCount,
       );
       if (!pcState) {
         return NextResponse.json({ error: "need players" }, { status: 409 });
@@ -1641,8 +1647,10 @@ export async function POST(
       if (room.gameSlug === PC_GAME_SLUG) {
         const past = parsePcState(room.state);
         const pcMode = pcLobbyMode(room.state) ?? past?.mode ?? null;
-        const meta: { ageGroup: string; pcMode?: PcMode } = { ageGroup: roomAgeGroup(room) };
+        const pcTeams = pcLobbyTeams(room.state);
+        const meta: { ageGroup: string; pcMode?: PcMode; pcTeams?: number } = { ageGroup: roomAgeGroup(room) };
         if (pcMode) meta.pcMode = pcMode;
+        if (pcTeams) meta.pcTeams = pcTeams;
         return JSON.stringify(meta);
       }
       /* منچ: بازی تیمی و گروه سنی برای مسابقهٔ بعدی هم می‌ماند */

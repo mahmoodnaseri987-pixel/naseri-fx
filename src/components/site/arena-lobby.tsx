@@ -74,6 +74,7 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
   const [sceneMode, setSceneMode] = useState<SceneMode>("classic"); // صحنه‌گردان: حالت بازی
   const [sceneDifficulty, setSceneDifficulty] = useState<SceneDifficulty>("easy"); // صحنه‌گردان: سختی و امتیاز
   const [pcMode, setPcMode] = useState<PcMode>("classic"); // ضرب‌المثل‌چین: حالت بازی
+  const [pcTeams, setPcTeams] = useState<2 | 4>(2); // رقابتی: تعداد تیم‌ها
 
   /* ظرفیت مجاز بازی انتخابی — منچ حداکثر ۴ نفر (چهار رنگ) */
   const capacityMax = gameSlug === LUDO_GAME_SLUG ? LUDO_MAX_PLAYERS : MAX_PLAYERS;
@@ -92,7 +93,10 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
       setSceneMode("classic");
       setSceneDifficulty("easy");
     }
-    if (!isPc) setPcMode("classic");
+    if (!isPc) {
+      setPcMode("classic");
+      setPcTeams(2);
+    }
   }, [isScene]);
 
   const numFmt = useCallback(
@@ -152,7 +156,8 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
           jadvalSher: sherMode, // جدول: حالت شرح‌در‌متن
           sceneMode, // صحنه‌گردان: کلاسیک / ۳کادری / حذفی‌ها
           sceneDifficulty, // صحنه‌گردان: سختی و امتیاز حدس
-          pcMode, // ضرب‌المثل‌چین: کلاسیک / تلفن‌چی / ممنوعه / ناقص
+          pcMode, // ضرب‌المثل‌چین: حالت بازی
+          pcTeams, // رقابتی: ۲ یا ۴ تیم
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -528,11 +533,11 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
               </div>
             )}
 
-            {/* حالت بازی ضرب‌المثل‌چین — کلاسیک، تلفن‌چی، ممنوعه، ناقص */}
+            {/* حالت بازی ضرب‌المثل‌چین — کلاسیک، رقابتی تیمی، ممنوعه، ناقص، حرفه‌ای */}
             {isPc && (
               <div className="mt-4">
                 <p className="text-xs font-bold text-zinc-400">{a.pc.modeLabel}</p>
-                <div className="mt-2 grid grid-cols-4 gap-1.5" role="radiogroup" aria-label={a.pc.modeLabel}>
+                <div className="mt-2 flex flex-wrap gap-1.5" role="radiogroup" aria-label={a.pc.modeLabel}>
                   {PC_MODES.map((m) => {
                     const active = m === pcMode;
                     return (
@@ -542,22 +547,55 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
                         role="radio"
                         aria-checked={active}
                         onClick={() => setPcMode(m)}
-                        className={`flex flex-col items-center gap-0.5 rounded-xl border px-1.5 py-2 text-[11px] font-bold leading-4 transition-colors ${
+                        className={`rounded-xl border px-2.5 py-2 text-[11px] font-bold leading-4 transition-colors ${
                           active
                             ? "border-sky-500/60 bg-sky-500/10 text-sky-200"
                             : "border-zinc-800 bg-zinc-950/40 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
                         }`}
                       >
-                        {m === "phone" ? a.pc.modePhone : m === "banned" ? a.pc.modeBanned : m === "incomplete" ? a.pc.modeIncomplete : a.pc.modeClassic}
+                        {a.pc[m === "race" ? "modeRace" : m === "banned" ? "modeBanned" : m === "incomplete" ? "modeIncomplete" : m === "pro" ? "modePro" : "modeClassic"]}
                       </button>
                     );
                   })}
                 </div>
+
+                {/* تعداد تیم‌ها — فقط حالت رقابتی */}
+                {pcMode === "race" && (
+                  <div className="mt-3">
+                    <p className="text-xs font-bold text-zinc-400">{a.pc.teamsLabel}</p>
+                    <div className="mt-2 flex gap-1.5">
+                      {([2, 4] as const).map((tc) => (
+                        <button
+                          key={tc}
+                          type="button"
+                          role="radio"
+                          aria-checked={pcTeams === tc}
+                          onClick={() => setPcTeams(tc)}
+                          className={`rounded-xl border px-3 py-2 text-[11px] font-bold transition-colors ${
+                            pcTeams === tc
+                              ? "border-sky-500/60 bg-sky-500/10 text-sky-200"
+                              : "border-zinc-800 bg-zinc-950/40 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
+                          }`}
+                        >
+                          {tc === 2 ? a.pc.teams2 : a.pc.teams4}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* شرح کوتاه حالت */}
                 <p className="mt-2 text-[11px] leading-5 text-zinc-500">
-                  {pcMode === "phone" ? a.pc.modePhoneHint : pcMode === "banned" ? a.pc.modeBannedHint : pcMode === "incomplete" ? a.pc.modeIncompleteHint : a.pc.modeClassicHint}
-                  {" "}
-                  <span className="text-zinc-600">· {a.pc.modeTeamsSoon}</span>
+                  {pcMode === "race" ? a.pc.modeRaceHint : pcMode === "banned" ? a.pc.modeBannedHint : pcMode === "incomplete" ? a.pc.modeIncompleteHint : pcMode === "pro" ? a.pc.modeProHint : a.pc.modeClassicHint}
                 </p>
+
+                {/* قوانین کامل — قبل از شروع بازی */}
+                <details className="mt-2 rounded-xl border border-zinc-800 bg-zinc-950/60">
+                  <summary className="cursor-pointer px-3 py-2 text-[11px] font-black text-zinc-300">📖 {a.pc.rulesTitle}</summary>
+                  <p className="px-3 pb-3 text-[11px] leading-5 text-zinc-400">
+                    {pcMode === "race" ? a.pc.rulesRace : pcMode === "banned" ? a.pc.rulesBanned : pcMode === "incomplete" ? a.pc.rulesIncomplete : pcMode === "pro" ? a.pc.rulesPro : a.pc.rulesClassic}
+                  </p>
+                </details>
               </div>
             )}
 

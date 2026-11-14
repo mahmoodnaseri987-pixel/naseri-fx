@@ -3,19 +3,21 @@
 /* ================================================================
    «ضرب‌المثل‌چین» — کلاینت بازی
    چینش‌گر ضرب‌المثل مخفی را می‌بیند و با کارت‌های کلمه‌ای متحرک
-   صحنه می‌چیند؛ صفت‌ها روی کارت اسم می‌نشینند؛ بقیه ضرب‌المثل را
-   کامل حدس می‌زنند؛ در افشا واکنش‌های متحرک و رأی خلاقیت هست.
+   صحنه می‌چیند؛ حدس‌ها خصوصی‌اند — هر کس فقط حدس خودش را می‌بیند؛
+   امتیاز سرعتی (زودتر بیشتر، اشتباه منفی). حالت رقابتی تیمی:
+   نوبتی ۶ دقیقه برای هر تیم با تعویض نقش به‌فاصله.
    انیمیشن کارت‌ها CSS خالص است — سبک، یکدست و بدون حق کپی‌رایت.
    ================================================================ */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Clapperboard, Clock, Crown, Eraser, Loader2, RotateCcw, Send, Undo2 } from "lucide-react";
+import { BookOpen, Clapperboard, Clock, Crown, Eraser, Loader2, RotateCcw, Send, Undo2 } from "lucide-react";
 import { useLang } from "@/components/site/language-provider";
 import { subscribeStream } from "@/lib/realtime";
 import { sfxAmbientStart, sfxAmbientStop, sfxIsMuted, sfxLose, sfxToggleMuted, sfxWin } from "@/lib/arena-sfx";
 import {
   PC_MAX_CARDS,
   PC_MODE_LABELS,
+  PC_RACE_TURN_MS,
   pcJokerNext,
   type PcBoard,
   type PcPlaced,
@@ -262,6 +264,7 @@ export function ProverbClient({ st, offsetMs }: { st: ArenaStateResponse; offset
   const [guessText, setGuessText] = useState("");
   const [sending, setSending] = useState(false);
   const [undoStack, setUndoStack] = useState<PcBoard[]>([]);
+  const [rulesOpen, setRulesOpen] = useState(false);
   const dirtyRef = useRef(false);
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const draftRoundRef = useRef(-1);
@@ -344,7 +347,7 @@ export function ProverbClient({ st, offsetMs }: { st: ArenaStateResponse; offset
     [flushSync],
   );
 
-  /* نوبت/دور جدید → پیش‌نویس از سرور تازه می‌شود */
+  /* نوبت/تلاش جدید → پیش‌نویس از سرور تازه می‌شود */
   useEffect(() => {
     if (!view) return;
     if (draftRoundRef.current !== view.round || !view.isMyTurn) {
@@ -370,11 +373,12 @@ export function ProverbClient({ st, offsetMs }: { st: ArenaStateResponse; offset
   const now = Date.now() + offsetMs;
   const remainSec = Math.max(0, Math.ceil((view.phaseEnds - now) / 1000));
   const beforeStart = now < view.startedAtMs && view.seq <= 1;
+  const isRace = view.isRace;
   const isArranger = view.isMyTurn && view.phase === "build";
   const board = isArranger && draft ? draft : view.board ?? { items: [] };
   const modeLabel = PC_MODE_LABELS[view.mode][fa ? "fa" : "en"];
-  const phoneMode = view.mode === "phone";
-  const canGuess = !phoneMode && view.phase === "build" && !view.isMyTurn;
+  const canGuess = view.phase === "build" && !view.isMyTurn && (!isRace || view.myRole === "guesser");
+  const rulesText = view.mode === "race" ? s.rulesRace : view.mode === "banned" ? s.rulesBanned : view.mode === "incomplete" ? s.rulesIncomplete : view.mode === "pro" ? s.rulesPro : s.rulesClassic;
 
   /* --- اعمال چینش‌گر روی پیش‌نویس --- */
   const pushUndo = (b: PcBoard) => {
@@ -463,12 +467,12 @@ export function ProverbClient({ st, offsetMs }: { st: ArenaStateResponse; offset
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: "pc_guess", text }),
       });
-      const data = (await res.json()) as { ok?: boolean; grade?: string; points?: number };
+      const data = (await res.json()) as { ok?: boolean; grade?: string; points?: number; reason?: string };
       if (data.ok) {
         if (data.grade === "full") setFlash({ kind: "ok", text: s.fullToast.replace("{p}", String(data.points ?? 10)) });
         else if (data.grade === "near") setFlash({ kind: "ok", text: s.nearToast.replace("{p}", String(data.points ?? 5)) });
         else if (data.grade === "miss-word") setFlash({ kind: "ok", text: s.missingToast.replace("{p}", String(data.points ?? 3)) });
-        else setFlash({ kind: "bad", text: s.wrongToast });
+        else if (data.grade === "wrong") setFlash({ kind: "bad", text: s.wrongToast });
         setGuessText("");
       } else {
         setFlash({ kind: "bad", text: s.sendError });
@@ -499,47 +503,76 @@ export function ProverbClient({ st, offsetMs }: { st: ArenaStateResponse; offset
   if (view.finished && view.result) {
     const champion = view.result.rows.find((r) => r.rank === 1);
     const awards = view.result.awards;
+    const hasAwards = Boolean(awards.picasso || awards.oscar || awards.surreal || awards.laconic);
     return (
       <div className="mx-auto max-w-2xl px-4 py-10 sm:px-6" dir="rtl">
         <style dangerouslySetInnerHTML={{ __html: PC_ANIM_CSS }} />
-        <div className="rounded-2xl border border-amber-500/30 bg-gradient-to-b from-amber-500/10 to-transparent p-6 text-center">
-          <p className="text-sm font-bold text-amber-300">{s.revealTitle}</p>
-          <h2 className="mt-2 text-2xl font-black text-amber-100">
-            <Crown className="me-1.5 inline h-6 w-6 text-amber-400" aria-hidden="true" />
-            {champion ? `${champion.name} — ${s.champion}` : s.champion}
-          </h2>
-          <div className="mt-5 grid gap-2.5 sm:grid-cols-4">
-            {[
-              { icon: "🎨", label: s.awardPicasso, w: awards.picasso },
-              { icon: "🎬", label: s.awardOscar, w: awards.oscar },
-              { icon: "🌀", label: s.awardSurreal, w: awards.surreal },
-              { icon: "✂️", label: s.awardLaconic, w: awards.laconic },
-            ].map((a) => (
-              <div key={a.label} className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3 text-center">
-                <p className="text-xs font-bold text-zinc-400">{a.icon} {a.label}</p>
-                <p className="mt-1 text-sm font-black text-zinc-100">{a.w ? a.w.name : "—"}</p>
-                {a.w && <p className="text-[11px] text-zinc-500">{a.w.detail}</p>}
+        {isRace && view.result.teams ? (
+          <div className="rounded-2xl border border-amber-500/30 bg-gradient-to-b from-amber-500/10 to-transparent p-6 text-center">
+            <p className="text-sm font-bold text-amber-300">{fa ? "پایان مسابقهٔ رقابتی" : "Race finished"}</p>
+            <h2 className="mt-2 text-2xl font-black text-amber-100">
+              <Crown className="me-1.5 inline h-6 w-6 text-amber-400" aria-hidden="true" />
+              {view.result.teams[0]?.name} — {fa ? "برنده" : "Winner"}
+            </h2>
+            <div className="mt-5 space-y-2">
+              {view.result.teams.map((tm) => (
+                <div
+                  key={tm.id}
+                  className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-950/60 px-4 py-2.5"
+                  style={{ borderColor: `${tm.color}55` }}
+                >
+                  <span className="text-sm font-black" style={{ color: tm.color }}>
+                    {tm.rank}. {tm.name}
+                  </span>
+                  <span className="text-sm font-black tabular-nums text-amber-300">{tm.score}</span>
+                </div>
+              ))}
+            </div>
+            <p className="mt-3 text-xs text-zinc-500">
+              {fa ? "امتیاز هر تیم به همهٔ اعضایش داده شد" : "Each team's score went to all its members"}
+            </p>
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-amber-500/30 bg-gradient-to-b from-amber-500/10 to-transparent p-6 text-center">
+            <p className="text-sm font-bold text-amber-300">{s.revealTitle}</p>
+            <h2 className="mt-2 text-2xl font-black text-amber-100">
+              <Crown className="me-1.5 inline h-6 w-6 text-amber-400" aria-hidden="true" />
+              {champion ? `${champion.name} — ${s.champion}` : s.champion}
+            </h2>
+            {hasAwards && (
+              <div className="mt-5 grid gap-2.5 sm:grid-cols-4">
+                {[
+                  { icon: "🎨", label: s.awardPicasso, w: awards.picasso },
+                  { icon: "🎬", label: s.awardOscar, w: awards.oscar },
+                  { icon: "🌀", label: s.awardSurreal, w: awards.surreal },
+                  { icon: "✂️", label: s.awardLaconic, w: awards.laconic },
+                ].map((a) => (
+                  <div key={a.label} className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3 text-center">
+                    <p className="text-xs font-bold text-zinc-400">{a.icon} {a.label}</p>
+                    <p className="mt-1 text-sm font-black text-zinc-100">{a.w ? a.w.name : "—"}</p>
+                    {a.w && <p className="text-[11px] text-zinc-500">{a.w.detail}</p>}
+                  </div>
+                ))}
+              </div>
+            )}
+            {!hasAwards && <p className="mt-3 text-xs text-zinc-500">{s.noAwards}</p>}
+          </div>
+        )}
+        {!isRace && (
+          <div className="mt-5 overflow-hidden rounded-2xl border border-zinc-800">
+            {view.result.rows.map((r) => (
+              <div
+                key={r.id}
+                className={`flex items-center justify-between px-4 py-2.5 ${r.rank === 1 ? "bg-amber-500/10" : "bg-zinc-950/60"} border-b border-zinc-800 last:border-0`}
+              >
+                <span className="text-sm font-bold text-zinc-200">
+                  {r.rank}. {r.name}
+                </span>
+                <span className="text-sm font-black tabular-nums text-amber-300">{r.score}</span>
               </div>
             ))}
           </div>
-          {!awards.picasso && !awards.oscar && !awards.surreal && !awards.laconic && (
-            <p className="mt-3 text-xs text-zinc-500">{s.noAwards}</p>
-          )}
-        </div>
-        {/* جدول امتیازها */}
-        <div className="mt-5 overflow-hidden rounded-2xl border border-zinc-800">
-          {view.result.rows.map((r) => (
-            <div
-              key={r.id}
-              className={`flex items-center justify-between px-4 py-2.5 ${r.rank === 1 ? "bg-amber-500/10" : "bg-zinc-950/60"} border-b border-zinc-800 last:border-0`}
-            >
-              <span className="text-sm font-bold text-zinc-200">
-                {r.rank}. {r.name}
-              </span>
-              <span className="text-sm font-black tabular-nums text-amber-300">{r.score}</span>
-            </div>
-          ))}
-        </div>
+        )}
         {st.room.hostId === me && (
           <button
             type="button"
@@ -562,6 +595,7 @@ export function ProverbClient({ st, offsetMs }: { st: ArenaStateResponse; offset
   const trayMods = tr.filter((k) => PC_CARD_MAP.get(k)?.t === "mod");
   const trayLinks = tr.filter((k) => PC_CARD_MAP.get(k)?.t === "link");
   const trayJokers = tr.filter((k) => PC_CARD_MAP.get(k)?.t === "joker");
+  const activeTeam = isRace ? view.teams.find((tm) => tm.id === view.activeTeamId) : undefined;
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6" dir="rtl">
@@ -583,12 +617,30 @@ export function ProverbClient({ st, offsetMs }: { st: ArenaStateResponse; offset
             )}
           </h1>
           <p className="mt-1 text-xs text-zinc-500">
-            {s.round} {view.round} {s.of} {view.totalRounds}
-            {" · "}
-            {s.arrangerTurn}: <b className="text-zinc-300">{view.arrangerName}</b>
+            {isRace ? (
+              <>
+                {s.teamTurn}: <b style={{ color: activeTeam?.color }}>{activeTeam?.name}</b>
+                {" · "}
+                {s.solvedTurn}: {view.turnSolved}
+              </>
+            ) : (
+              <>
+                {s.round} {view.round} {s.of} {view.totalRounds}
+                {" · "}
+                {s.arrangerTurn}: <b className="text-zinc-300">{view.arrangerName}</b>
+              </>
+            )}
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setRulesOpen(true)}
+            aria-label={s.rulesBtn}
+            className="rounded-lg border border-zinc-800 bg-zinc-900/70 p-2 text-zinc-400"
+          >
+            <BookOpen className="h-4 w-4" aria-hidden="true" />
+          </button>
           <button
             type="button"
             onClick={() => setMuted(sfxToggleMuted())}
@@ -607,6 +659,36 @@ export function ProverbClient({ st, offsetMs }: { st: ArenaStateResponse; offset
           </span>
         </div>
       </div>
+
+      {/* نوار رقابتی — نقش من، تعویض نقش، امتیاز تیم‌ها */}
+      {isRace && (
+        <div className="mt-3 rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-xs font-black text-zinc-300">
+              {view.myRole === "arranger" ? `🎬 ${s.arrangerTurn} — تو` : view.myRole === "guesser" ? `🔎 ${s.roleGuesser} — تو` : `👀 ${s.roleSpectator}`}
+            </span>
+            {view.nextSwapInMs !== null && (
+              <span className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-[11px] font-black tabular-nums text-amber-300">
+                🔄 {s.swapIn} {Math.ceil(view.nextSwapInMs / 1000)}ث
+              </span>
+            )}
+          </div>
+          <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+            {view.teams.map((tm) => (
+              <div
+                key={tm.id}
+                className={`rounded-xl border px-2.5 py-1.5 ${tm.id === view.activeTeamId ? "bg-zinc-800/80" : "bg-zinc-950/60"}`}
+                style={{ borderColor: `${tm.color}66` }}
+              >
+                <p className="text-[10px] font-bold" style={{ color: tm.color }}>
+                  {tm.name}
+                </p>
+                <p className="text-sm font-black tabular-nums text-zinc-100">{tm.score}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {beforeStart && <p className="mt-3 text-center text-xs text-zinc-500">{s.startingIn}</p>}
 
@@ -642,7 +724,7 @@ export function ProverbClient({ st, offsetMs }: { st: ArenaStateResponse; offset
                 )}
                 {view.swapped && <span className="rounded-lg border border-amber-500/40 px-2 py-0.5 font-bold text-amber-300">{s.swapped}</span>}
               </div>
-              {!phoneMode && (
+              {!isRace && (
                 <button
                   type="button"
                   disabled={view.swapped || sending}
@@ -652,23 +734,6 @@ export function ProverbClient({ st, offsetMs }: { st: ArenaStateResponse; offset
                   {s.swapBtn}
                 </button>
               )}
-            </div>
-          )}
-
-          {/* تلفن‌چی — هدف برای بازساز */}
-          {phoneMode && view.targetBoard && (
-            <div className="rounded-2xl border border-fuchsia-500/30 bg-fuchsia-500/[0.06] p-3">
-              <p className="text-[11px] font-black text-fuchsia-300">{s.targetLabel}</p>
-              <p className="mt-1 text-[11px] leading-5 text-zinc-400">{s.phoneNote}</p>
-              <SceneCanvas
-                board={view.targetBoard}
-                editable={false}
-                activeIdx={null}
-                onActivate={() => undefined}
-                onMove={() => undefined}
-                onCycleJoker={() => undefined}
-                tone={tone}
-              />
             </div>
           )}
 
@@ -769,8 +834,8 @@ export function ProverbClient({ st, offsetMs }: { st: ArenaStateResponse; offset
             </>
           )}
 
-          {/* ---------- تماشاچی: کمک‌ها، حدس، فید ---------- */}
-          {!isArranger && (
+          {/* ---------- حدس‌زن: کمک‌ها، حدس، فید خصوصی ---------- */}
+          {canGuess && (
             <>
               {/* کمک‌ها */}
               {(view.puzzleWordCount !== null || view.puzzleHintWord) && (
@@ -789,55 +854,47 @@ export function ProverbClient({ st, offsetMs }: { st: ArenaStateResponse; offset
               )}
 
               {/* حدس */}
-              {!phoneMode && (
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    void sendGuess();
-                  }}
-                  className="flex gap-2"
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void sendGuess();
+                }}
+                className="flex gap-2"
+              >
+                <input
+                  value={guessText}
+                  onChange={(e) => setGuessText(e.target.value)}
+                  placeholder={s.guessPlaceholder}
+                  maxLength={160}
+                  className="min-w-0 flex-1 rounded-xl border border-zinc-800 bg-zinc-950/70 px-4 py-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-sky-500/60"
+                />
+                <button
+                  type="submit"
+                  disabled={sending || !guessText.trim()}
+                  className="rounded-xl bg-sky-500 px-4 py-3 text-sm font-black text-sky-950 transition-colors hover:bg-sky-400 disabled:opacity-50"
                 >
-                  <input
-                    value={guessText}
-                    onChange={(e) => setGuessText(e.target.value)}
-                    placeholder={s.guessPlaceholder}
-                    maxLength={160}
-                    className="min-w-0 flex-1 rounded-xl border border-zinc-800 bg-zinc-950/70 px-4 py-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-sky-500/60"
-                  />
-                  <button
-                    type="submit"
-                    disabled={sending || !guessText.trim()}
-                    className="rounded-xl bg-sky-500 px-4 py-3 text-sm font-black text-sky-950 transition-colors hover:bg-sky-400 disabled:opacity-50"
-                  >
-                    <Send className="h-4 w-4" aria-hidden="true" />
-                  </button>
-                </form>
-              )}
+                  <Send className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </form>
 
-              {/* فید حدس‌ها + درست‌گویان */}
-              {!phoneMode && (
-                <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70">
-                  <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-2.5">
-                    <p className="text-xs font-black text-zinc-400">{s.guessFeed}</p>
-                    <p className="text-xs font-black text-emerald-400">
-                      ✓ {view.scorers.filter((x) => x.tier === "full").length}
-                    </p>
-                  </div>
-                  <div ref={feedRef} className="max-h-44 space-y-1.5 overflow-y-auto px-4 py-3">
-                    {view.guesses.length === 0 && <p className="text-xs text-zinc-600">—</p>}
-                    {view.guesses.map((g) => (
-                      <div key={`${g.id}:${g.atMs}`} className="flex items-center justify-between gap-2 text-xs">
-                        <span className="truncate text-zinc-400">
-                          <b className="text-zinc-300">{g.name}:</b> {g.text}
-                        </span>
-                        {g.tier === "full" && <span className="font-black text-emerald-400">✓</span>}
-                        {g.tier === "near" && <span className="font-black text-amber-400">½</span>}
-                        {g.tier === "miss-word" && <span className="font-black text-sky-400">🎯</span>}
-                      </div>
-                    ))}
-                  </div>
+              {/* فید خصوصی — فقط حدس‌های خودم */}
+              <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70">
+                <div className="border-b border-zinc-800 px-4 py-2.5">
+                  <p className="text-xs font-black text-zinc-400">{s.guessFeed}</p>
                 </div>
-              )}
+                <div ref={feedRef} className="max-h-44 space-y-1.5 overflow-y-auto px-4 py-3">
+                  {view.guesses.length === 0 && <p className="text-xs text-zinc-600">—</p>}
+                  {view.guesses.map((g) => (
+                    <div key={`${g.id}:${g.atMs}`} className="flex items-center justify-between gap-2 text-xs">
+                      <span className="truncate text-zinc-400">{g.text}</span>
+                      {g.tier === "full" && <span className="font-black text-emerald-400">✓</span>}
+                      {g.tier === "near" && <span className="font-black text-amber-400">½</span>}
+                      {g.tier === "miss-word" && <span className="font-black text-sky-400">🎯</span>}
+                      {g.tier === "wrong" && <span className="font-black text-red-400">✗</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
             </>
           )}
         </div>
@@ -846,7 +903,28 @@ export function ProverbClient({ st, offsetMs }: { st: ArenaStateResponse; offset
       {/* ---------- افشا: ضرب‌المثل، تایم‌لپس، واکنش‌ها، رأی ---------- */}
       {reveal && (
         <div className="mt-4 space-y-3">
-          {view.puzzle && (
+          {/* خلاصهٔ نوبت رقابتی */}
+          {isRace && (
+            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/[0.06] p-4">
+              <p className="text-[11px] font-bold text-emerald-300">
+                {s.teamTurn}: {activeTeam?.name} · {s.solvedTurn}: {view.turnSolved}
+              </p>
+              {view.turnPuzzles.length > 0 ? (
+                <ul className="mt-2 space-y-1">
+                  {view.turnPuzzles.map((p, i) => (
+                    <li key={`${i}:${p.slice(0, 12)}`} className="text-sm font-bold leading-6 text-emerald-100">
+                      ✓ {p}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-2 text-xs text-zinc-400">—</p>
+              )}
+            </div>
+          )}
+
+          {/* افشای ضرب‌المثل — کلاسیک */}
+          {!isRace && view.puzzle && (
             <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/[0.06] p-4 text-center">
               <p className="text-[11px] font-bold text-emerald-300">{s.revealTitle}</p>
               <p className="mt-1 text-xl font-black leading-8 text-emerald-100">{view.puzzle}</p>
@@ -889,8 +967,8 @@ export function ProverbClient({ st, offsetMs }: { st: ArenaStateResponse; offset
             )}
           </div>
 
-          {/* رأی خلاقیت — برای غیرچینش‌گرها */}
-          {!view.isMyTurn && !phoneMode && (
+          {/* رأی خلاقیت — فقط حالت‌های کلاسیک */}
+          {!isRace && !view.isMyTurn && (
             <div className="rounded-2xl border border-amber-500/30 bg-amber-500/[0.06] p-3 text-center">
               <p className="text-[11px] font-black text-amber-300">{s.voteTitle}</p>
               {view.myVote > 0 ? (
@@ -911,7 +989,7 @@ export function ProverbClient({ st, offsetMs }: { st: ArenaStateResponse; offset
               )}
             </div>
           )}
-          {view.votesTotal > 0 && (
+          {!isRace && view.votesTotal > 0 && (
             <p className="text-center text-xs font-bold text-zinc-400">
               {s.votesTotal}: ⭐{view.votesTotal}
             </p>
@@ -933,6 +1011,28 @@ export function ProverbClient({ st, offsetMs }: { st: ArenaStateResponse; offset
                   <span className="text-sm font-black tabular-nums text-amber-300">{p.score}</span>
                 </div>
               ))}
+          </div>
+        </div>
+      )}
+
+      {/* ---------- مودال قوانین ---------- */}
+      {rulesOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setRulesOpen(false);
+          }}
+        >
+          <div className="max-h-[80vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-zinc-700 bg-zinc-950 p-5" dir="rtl">
+            <p className="text-sm font-black text-sky-300">📖 {s.rulesTitle} — {modeLabel}</p>
+            <p className="mt-3 text-[12px] leading-6 text-zinc-300">{rulesText}</p>
+            <button
+              type="button"
+              onClick={() => setRulesOpen(false)}
+              className="mt-4 w-full rounded-xl bg-sky-500 px-4 py-2.5 text-sm font-black text-sky-950 hover:bg-sky-400"
+            >
+              {fa ? "فهمیدم" : "Got it"}
+            </button>
           </div>
         </div>
       )}
