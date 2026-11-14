@@ -597,6 +597,7 @@ export function ProverbClient({ st, offsetMs }: { st: ArenaStateResponse; offset
   const trayLinks = tr.filter((k) => PC_CARD_MAP.get(k)?.t === "link");
   const trayJokers = tr.filter((k) => PC_CARD_MAP.get(k)?.t === "joker");
   const activeTeam = isRace ? view.teams.find((tm) => tm.id === view.activeTeamId) : undefined;
+  const [dashOpen, setDashOpen] = useState(true);
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6" dir="rtl">
@@ -668,26 +669,84 @@ export function ProverbClient({ st, offsetMs }: { st: ArenaStateResponse; offset
             <span className="text-xs font-black text-zinc-300">
               {view.myRole === "arranger" ? `🎬 ${s.arrangerTurn} — تو` : view.myRole === "guesser" ? `🔎 ${s.roleGuesser} — تو` : `👀 ${s.roleSpectator}`}
             </span>
-            {view.nextSwapInMs !== null && (
-              <span className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-[11px] font-black tabular-nums text-amber-300">
-                🔄 {s.swapIn} {Math.ceil(view.nextSwapInMs / 1000)}ث
-              </span>
-            )}
-          </div>
-          <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-            {view.teams.map((tm) => (
-              <div
-                key={tm.id}
-                className={`rounded-xl border px-2.5 py-1.5 ${tm.id === view.activeTeamId ? "bg-zinc-800/80" : "bg-zinc-950/60"}`}
-                style={{ borderColor: `${tm.color}66` }}
+            <span className="flex items-center gap-2">
+              {view.nextSwapInMs !== null && (
+                <span className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-[11px] font-black tabular-nums text-amber-300">
+                  🔄 {s.swapIn} {Math.ceil(view.nextSwapInMs / 1000)}ث
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => setDashOpen((v) => !v)}
+                className="rounded-lg border border-zinc-700 bg-zinc-800/60 px-2 py-1 text-[11px] font-bold text-zinc-300 hover:bg-zinc-700/60"
               >
-                <p className="text-[10px] font-bold" style={{ color: tm.color }}>
-                  {tm.name}
-                </p>
-                <p className="text-sm font-black tabular-nums text-zinc-100">{tm.score}</p>
-              </div>
-            ))}
+                {dashOpen ? (fa ? "بستن داشبرد ▲" : "collapse ▲") : (fa ? "داشبرد تیم‌ها ▼" : "dashboard ▼")}
+              </button>
+            </span>
           </div>
+          {dashOpen && (
+            <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+              {view.teams.map((tm) => {
+                const isActive = tm.id === view.activeTeamId;
+                const isMine = tm.memberIds.includes(me);
+                const rows = [...view.players].filter((p) => tm.memberIds.includes(p.id));
+                return (
+                  <div
+                    key={tm.id}
+                    className="overflow-hidden rounded-xl border"
+                    style={{
+                      borderColor: isActive ? tm.color : `${tm.color}4d`,
+                      background: isActive ? `${tm.color}14` : "rgba(9,9,11,.55)",
+                      ...(isActive ? { boxShadow: `0 0 0 1.5px ${tm.color}59` } : {}),
+                    }}
+                  >
+                    <div
+                      className="flex items-center justify-between gap-1 px-2 pt-1.5 pb-1"
+                      style={{ borderBottom: `1px solid ${tm.color}2e` }}
+                    >
+                      <span className="flex min-w-0 items-center gap-1 text-[10px] font-black" style={{ color: tm.color }}>
+                        <span className="inline-block size-2 shrink-0 rounded-full" style={{ background: tm.color }} />
+                        <span className="truncate">{tm.name}</span>
+                        {isMine && <span className="shrink-0 text-[9px] font-bold text-emerald-400">{fa ? "· شما" : "· you"}</span>}
+                      </span>
+                      <span className="shrink-0 text-[11px] font-black tabular-nums text-amber-300">{tm.score}</span>
+                    </div>
+                    {rows.map((p) => (
+                      <div
+                        key={p.id}
+                        className={`flex items-center gap-1.5 px-1.5 py-1 ${p.id === me ? "bg-zinc-800/60" : ""}`}
+                        title={
+                          isActive
+                            ? p.id === view.arrangerId
+                              ? fa ? "چینشگر — کارت‌ها را می‌چیند" : "arranger"
+                              : fa ? "پاسخگو — جواب می‌دهد" : "guesser"
+                            : fa ? "در انتظار نوبت" : "waiting"
+                        }
+                      >
+                        <MemberAvatar memberId={p.id} name={p.name} size={18} />
+                        <span className="min-w-0 flex-1 truncate text-[10px] font-bold text-zinc-300">
+                          {p.name}
+                          {p.id === me && <span className="text-[9px] font-black text-emerald-400"> ★</span>}
+                        </span>
+                        {isActive && (
+                          <span
+                            className="shrink-0 rounded-full px-1.5 text-[9px] font-black"
+                            style={
+                              p.id === view.arrangerId
+                                ? { background: "rgba(56,189,248,.15)", color: "#7dd3fc" }
+                                : { background: "rgba(52,211,153,.15)", color: "#6ee7b7" }
+                            }
+                          >
+                            {p.id === view.arrangerId ? (fa ? "🎬 چینشگر" : "🎬 build") : (fa ? "💬 پاسخگو" : "💬 guess")}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
