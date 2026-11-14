@@ -417,7 +417,7 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
                   ),
                 )}
               </div>
-              <p className="mt-2 text-[11px] leading-5 text-zinc-500">{a.playersHint}</p>
+              <p className="mt-2 text-[11px] leading-5 text-zinc-400">{a.playersHint}</p>
             </div>
 
             {/* حالت رقابت جدول — کلاسیک یا شرح‌در‌متن */}
@@ -447,7 +447,7 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
                     );
                   })}
                 </div>
-                <p className="mt-2 text-[11px] leading-5 text-zinc-500">
+                <p className="mt-2 text-[11px] leading-5 text-zinc-400">
                   {sherMode ? a.modeSherHint : a.modeClassicHint}
                 </p>
               </div>
@@ -505,7 +505,7 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
                 )}
 
                 {/* شرح کوتاه حالت */}
-                <p className="mt-2 text-[11px] leading-5 text-zinc-500">
+                <p className="mt-2 text-[11px] leading-5 text-zinc-400">
                   {pcMode === "race" ? a.pc.modeRaceHint : pcMode === "banned" ? a.pc.modeBannedHint : pcMode === "incomplete" ? a.pc.modeIncompleteHint : pcMode === "pro" ? a.pc.modeProHint : a.pc.modeClassicHint}
                 </p>
 
@@ -543,7 +543,7 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
                   );
                 })}
               </div>
-              <p className="mt-2 text-[11px] leading-5 text-zinc-500">{isJadval ? a.diffHint : a.ageHint}</p>
+              <p className="mt-2 text-[11px] leading-5 text-zinc-400">{isJadval ? a.diffHint : a.ageHint}</p>
             </div>
 
             <Button
