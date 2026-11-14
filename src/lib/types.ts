@@ -238,6 +238,7 @@ export type SherViewType = import("@/lib/sher-shared").SherView;
 
 /* بازی «صحنه‌گردان» — واژهٔ مخفی فقط برای کارگردان دور در فاز چیدمان می‌آید */
 export type SceneViewType = import("@/lib/scene-shared").SceneView;
+export type PcViewType = import("@/lib/proverb-shared").PcView;
 
 export type ArenaStateResponse = {
   now: number;
@@ -261,6 +262,7 @@ export type ArenaStateResponse = {
   ludo: LudoViewType | null;
   sher: SherViewType | null;
   scene: SceneViewType | null;
+  proverb: PcViewType | null;
 };
 
 /* ---------- چت (لابی عمومی و داخل اتاق) ---------- */

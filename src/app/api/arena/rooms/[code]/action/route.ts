@@ -91,6 +91,23 @@ import {
   type SceneMode,
 } from "@/lib/scene-shared";
 import {
+  PC_GAME_SLUG,
+  PC_MODES,
+  pcLobbyMode,
+  type PcMode,
+} from "@/lib/proverb-shared";
+import {
+  createPcState,
+  parsePcState,
+  pcGuess,
+  pcReact,
+  pcSetBoard,
+  pcSwap,
+  pcTick,
+  pcValidateBoard,
+  pcVote,
+} from "@/lib/proverb-engine";
+import {
   createSceneState,
   parseSceneState,
   sceneGuess,
@@ -98,7 +115,7 @@ import {
   sceneTick,
   sceneValidateBoard,
 } from "@/lib/scene-engine";
-import { invalidateRoomSnapshot, parseState, persistFireState, persistLudoState, persistSceneState, persistSherState, settleLudo } from "@/lib/arena-live";
+import { invalidateRoomSnapshot, parseState, persistFireState, persistLudoState, persistPcState, persistSceneState, persistSherState, settleLudo } from "@/lib/arena-live";
 
 /** خواندن امن فرادادهٔ اتاق (مثل گروه سنی) از JSON خام state — قبل از شروع بازی */
 function safeStateMeta(raw: string): { ageGroup?: unknown; jadvalSher?: unknown } {
@@ -1234,6 +1251,184 @@ export async function POST(
     /* ready / leave / again → منطق مشترک پایین اجرا می‌شود */
   }
 
+  /* ================================================================
+     اکشن‌های اختصاصی «ضرب‌المثل‌چین» — کارت‌های کلمه‌ای متحرک
+     ================================================================ */
+  if (room.gameSlug === PC_GAME_SLUG) {
+    /* --- شروع مسابقه (میزبان، حداقل ۲ نفر، همه آماده) --- */
+    if (type === "start") {
+      if (room.status !== "lobby") {
+        return NextResponse.json({ error: "conflict" }, { status: 409 });
+      }
+      if (room.hostId !== me.memberId) {
+        return NextResponse.json({ error: "not host" }, { status: 403 });
+      }
+      if (room.members.length < MIN_PLAYERS) {
+        return NextResponse.json({ error: "need players" }, { status: 409 });
+      }
+      if (!room.members.every((m) => m.isReady)) {
+        return NextResponse.json({ error: "not ready" }, { status: 409 });
+      }
+      const requested = typeof body.mode === "string" ? body.mode : "";
+      const lobby = pcLobbyMode(room.state);
+      const mode: PcMode =
+        (PC_MODES as readonly string[]).includes(requested)
+          ? (requested as PcMode)
+          : (lobby ?? "classic");
+      const pcState = createPcState(
+        mode,
+        room.members.map((m) => ({ id: m.memberId, name: m.name })),
+        Date.now(),
+      );
+      if (!pcState) {
+        return NextResponse.json({ error: "need players" }, { status: 409 });
+      }
+      await db.$transaction([
+        db.room.update({
+          where: { id: room.id },
+          data: { status: "playing", state: JSON.stringify(pcState) },
+        }),
+        db.roomMember.updateMany({
+          where: { roomId: room.id },
+          data: { isReady: false, fireInput: "{}" },
+        }),
+        db.chatMessage.create({
+          data: {
+            scope: room.code,
+            memberId: me.memberId,
+            name: me.name,
+            content: "مسابقهٔ «ضرب‌المثل‌چین» شروع شد — چینش‌گر با کارت‌های کلمه‌ای صحنه می‌چیند، بقیه ضرب‌المثل را حدس بزنید!",
+            kind: "system",
+          },
+        }),
+      ]);
+      invalidateRoomSnapshot(room.code);
+      return NextResponse.json({ ok: true });
+    }
+
+    /* --- ثبت صحنهٔ چینش‌گر --- */
+    if (type === "pc_set") {
+      if (room.status !== "playing") {
+        return NextResponse.json({ error: "conflict" }, { status: 409 });
+      }
+      const pcState = parsePcState(room.state);
+      if (!pcState) return NextResponse.json({ error: "gone" }, { status: 404 });
+      pcTick(pcState, { now: Date.now() });
+      const round = pcState.rounds[pcState.round - 1];
+      if (!round) return NextResponse.json({ error: "gone" }, { status: 404 });
+      const board = pcValidateBoard(body.board, round);
+      const outcome = pcSetBoard(pcState, me.memberId, board);
+      if (!outcome.ok) {
+        return NextResponse.json({ error: outcome.reason ?? "conflict" }, { status: 409 });
+      }
+      const persisted = await persistPcState(room.id, pcState);
+      invalidateRoomSnapshot(room.code);
+      if (!persisted) {
+        return NextResponse.json({ error: "conflict" }, { status: 409 });
+      }
+      return NextResponse.json({ ok: true });
+    }
+
+    /* --- ثبت حدس — کامل/نزدیک/کارت‌گم‌شده --- */
+    if (type === "pc_guess") {
+      if (room.status !== "playing") {
+        return NextResponse.json({ error: "conflict" }, { status: 409 });
+      }
+      const pcState = parsePcState(room.state);
+      if (!pcState) return NextResponse.json({ error: "gone" }, { status: 404 });
+      pcTick(pcState, { now: Date.now() });
+      const text = typeof body.text === "string" ? body.text : "";
+      const outcome = pcGuess(pcState, me.memberId, me.name, text, Date.now());
+      if (!outcome.ok) {
+        return NextResponse.json({ error: outcome.reason ?? "conflict" }, { status: 409 });
+      }
+      const persisted = await persistPcState(room.id, pcState);
+      invalidateRoomSnapshot(room.code);
+      if (!persisted) {
+        return NextResponse.json({ error: "conflict" }, { status: 409 });
+      }
+      if (outcome.points && outcome.points > 0) {
+        try {
+          const label = outcome.grade === "full" ? "ضرب‌المثل را کامل حدس زد" : outcome.grade === "near" ? "نزدیک زد" : "کارت گم‌شده را پیدا کرد";
+          await db.chatMessage.create({
+            data: {
+              scope: room.code,
+              memberId: me.memberId,
+              name: me.name,
+              content: `${me.name} ${label}! (+${outcome.points} امتیاز)`,
+              kind: "system",
+            },
+          });
+          invalidateRoomSnapshot(room.code);
+        } catch {
+          /* چت حیاتی نیست */
+        }
+      }
+      return NextResponse.json({ ok: true, grade: outcome.grade, points: outcome.points ?? 0 });
+    }
+
+    /* --- تعویض ضرب‌المثل — یک‌بار، −۲ --- */
+    if (type === "pc_swap") {
+      if (room.status !== "playing") {
+        return NextResponse.json({ error: "conflict" }, { status: 409 });
+      }
+      const pcState = parsePcState(room.state);
+      if (!pcState) return NextResponse.json({ error: "gone" }, { status: 404 });
+      pcTick(pcState, { now: Date.now() });
+      const outcome = pcSwap(pcState, me.memberId);
+      if (!outcome.ok) {
+        return NextResponse.json({ error: outcome.reason ?? "conflict" }, { status: 409 });
+      }
+      const persisted = await persistPcState(room.id, pcState);
+      invalidateRoomSnapshot(room.code);
+      if (!persisted) {
+        return NextResponse.json({ error: "conflict" }, { status: 409 });
+      }
+      return NextResponse.json({ ok: true });
+    }
+
+    /* --- رأی خلاقیت — در افشا، یک‌بار، ۱ تا ۳ --- */
+    if (type === "pc_vote") {
+      if (room.status !== "playing") {
+        return NextResponse.json({ error: "conflict" }, { status: 409 });
+      }
+      const pcState = parsePcState(room.state);
+      if (!pcState) return NextResponse.json({ error: "gone" }, { status: 404 });
+      pcTick(pcState, { now: Date.now() });
+      const outcome = pcVote(pcState, me.memberId, Number(body.value));
+      if (!outcome.ok) {
+        return NextResponse.json({ error: outcome.reason ?? "conflict" }, { status: 409 });
+      }
+      const persisted = await persistPcState(room.id, pcState);
+      invalidateRoomSnapshot(room.code);
+      if (!persisted) {
+        return NextResponse.json({ error: "conflict" }, { status: 409 });
+      }
+      return NextResponse.json({ ok: true });
+    }
+
+    /* --- واکنش متحرک — در افشا --- */
+    if (type === "pc_react") {
+      if (room.status !== "playing") {
+        return NextResponse.json({ error: "conflict" }, { status: 409 });
+      }
+      const pcState = parsePcState(room.state);
+      if (!pcState) return NextResponse.json({ error: "gone" }, { status: 404 });
+      const outcome = pcReact(pcState, me.memberId, me.name, typeof body.k === "string" ? body.k : "");
+      if (!outcome.ok) {
+        return NextResponse.json({ error: outcome.reason ?? "conflict" }, { status: 409 });
+      }
+      const persisted = await persistPcState(room.id, pcState);
+      invalidateRoomSnapshot(room.code);
+      if (!persisted) {
+        return NextResponse.json({ error: "conflict" }, { status: 409 });
+      }
+      return NextResponse.json({ ok: true });
+    }
+
+    /* ready / leave / again → منطق مشترک پایین اجرا می‌شود */
+  }
+
   /* --- پرکردن صندلی‌های خالی با ربات (میزبان، فقط لابی، فقط بازی‌های سؤالی) ---
      میزبان بین «انتظار برای تکمیل بازیکنان» و «شروع با ربات» آزاد است؛
      هر ربات بلافاصله آماده است و در مسابقه سؤالی/جدول/حدس تصویر واقعاً بازی می‌کند. */
@@ -1440,6 +1635,14 @@ export async function POST(
         const meta: { ageGroup: string; sceneMode?: SceneMode; sceneDifficulty?: SceneDifficulty } = { ageGroup: roomAgeGroup(room) };
         if (sceneMode) meta.sceneMode = sceneMode;
         if (sceneDifficulty) meta.sceneDifficulty = sceneDifficulty;
+        return JSON.stringify(meta);
+      }
+      /* ضرب‌المثل‌چین: حالت انتخابی میزبان برای «مسابقه دوباره» حفظ می‌شود */
+      if (room.gameSlug === PC_GAME_SLUG) {
+        const past = parsePcState(room.state);
+        const pcMode = pcLobbyMode(room.state) ?? past?.mode ?? null;
+        const meta: { ageGroup: string; pcMode?: PcMode } = { ageGroup: roomAgeGroup(room) };
+        if (pcMode) meta.pcMode = pcMode;
         return JSON.stringify(meta);
       }
       /* منچ: بازی تیمی و گروه سنی برای مسابقهٔ بعدی هم می‌ماند */

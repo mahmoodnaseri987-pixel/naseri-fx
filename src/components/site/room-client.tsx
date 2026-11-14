@@ -33,6 +33,7 @@ import { PicClient } from "@/components/site/pic-client";
 import { LudoClient } from "@/components/site/ludo-client";
 import { SherClient } from "@/components/site/sher-client";
 import { SceneClient } from "@/components/site/scene-client";
+import { ProverbClient } from "@/components/site/proverb-client";
 import { subscribeStream } from "@/lib/realtime";
 import { ARENA_GAME_SLUG, ANSWER_MS, BOT_GAMES, REVEAL_MS, CATEGORY_LABELS, isBotId, type ArenaCategory } from "@/lib/arena-game";
 import { JADVAL_GAME_SLUG } from "@/lib/jadval-shared";
@@ -40,6 +41,7 @@ import { PIC_GAME_SLUG } from "@/lib/pic-shared";
 import { LUDO_GAME_SLUG } from "@/lib/ludo-shared";
 import { SHER_GAME_SLUG, SHER_MODES, sherModesFor, type SherMode } from "@/lib/sher-shared";
 import { SCENE_GAME_SLUG } from "@/lib/scene-shared";
+import { PC_GAME_SLUG } from "@/lib/proverb-shared";
 import { sfxAmbientStart, sfxAmbientStop, sfxIsMuted, sfxLose, sfxToggleMuted, sfxWin } from "@/lib/arena-sfx";
 import type { ArenaStateResponse } from "@/lib/types";
 
@@ -604,6 +606,16 @@ export function RoomClient({ code }: { code: string }) {
       <>
         {chatFloat}
         <SceneClient st={st} offsetMs={st.now - fetchedAt} />
+      </>
+    );
+  }
+
+  /* «ضرب‌المثل‌چین» — کارت‌ها، حدس‌ها و نتایج داخل خود بازی رندر می‌شود */
+  if (st.room.gameSlug === PC_GAME_SLUG && st.proverb) {
+    return (
+      <>
+        {chatFloat}
+        <ProverbClient st={st} offsetMs={st.now - fetchedAt} />
       </>
     );
   }

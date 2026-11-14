@@ -33,7 +33,9 @@ import {
 import { SHER_GAME_SLUG, parseSherState, type SherRoomState } from "@/lib/sher-shared";
 import { buildSherView, sherTick } from "@/lib/sher-engine";
 import { SCENE_GAME_SLUG, type SceneRoomState } from "@/lib/scene-shared";
+import { PC_GAME_SLUG, type PcRoomState } from "@/lib/proverb-shared";
 import { buildSceneView, parseSceneState, sceneTick } from "@/lib/scene-engine";
+import { buildPcView, parsePcState, pcTick } from "@/lib/proverb-engine";
 import {
   buildJadvalResult,
   buildJadvalView,
@@ -278,6 +280,23 @@ export async function settleScene(roomId: string, scState: SceneRoomState): Prom
 }
 
 /* ================================================================
+   ذخیرهٔ وضعیت «ضرب‌المثل‌چین» — با گارد «فقط رو به جلو» روی seq
+   ================================================================ */
+
+export async function persistPcState(roomId: string, pcState: PcRoomState): Promise<boolean> {
+  const json = JSON.stringify(pcState);
+  try {
+    const n = await db.$executeRaw`
+      UPDATE "Room" SET state = ${json}, "lastActivity" = now()
+      WHERE id = ${roomId} AND status = 'playing'
+        AND COALESCE(NULLIF(state, '')::jsonb ->> 'seq', '0')::double precision < ${pcState.seq}`;
+    return n > 0;
+  } catch {
+    return false;
+  }
+}
+
+/* ================================================================
    قطعی‌سازی «رقابت جدول» — پایان با تایم‌اوت یا تکمیل جدول
    ================================================================ */
 
@@ -380,6 +399,7 @@ async function buildSnapshot(code: string): Promise<RoomSnapshot | null> {
   const isLudo = room.gameSlug === LUDO_GAME_SLUG;
   const isSher = room.gameSlug === SHER_GAME_SLUG;
   const isScene = room.gameSlug === SCENE_GAME_SLUG;
+  const isPc = room.gameSlug === PC_GAME_SLUG;
   const state = parseState(room.state);
   const now = Date.now();
   let status = room.status;
@@ -651,10 +671,36 @@ async function buildSnapshot(code: string): Promise<RoomSnapshot | null> {
     }
   }
 
+  /* «ضرب‌المثل‌چین»: تیک خودکار — گذر فازها، چیدن چینش‌گرِ ربات، حدس و رأی ربات‌ها */
+  let pcState: PcRoomState | null = null;
+  if (isPc && (status === "playing" || status === "finished")) {
+    pcState = parsePcState(room.state);
+  }
+  if (isPc && status === "playing" && pcState) {
+    const tick = pcTick(pcState, { now: Date.now() });
+    if (tick.mutated) {
+      room.state = JSON.stringify(pcState);
+      await persistPcState(room.id, pcState);
+    }
+    if (pcState.result) {
+      await db.room.update({
+        where: { id: room.id },
+        data: { status: "finished", state: JSON.stringify(pcState), lastActivity: new Date() },
+      });
+      for (const row of pcState.result!.rows) {
+        await db.roomMember.updateMany({
+          where: { roomId: room.id, memberId: row.id },
+          data: { score: row.score },
+        });
+      }
+      status = "finished";
+    }
+  }
+
   /* اگر مسابقه کوییز زمانش تمام شده، وضعیت را در دیتابیس قطعی کن
      (بازی‌های با وضعیت اختصاصی مستثنا هستند) */
   if (
-    !isNabard && !isFire && !isJadval && !isPic && !isLudo && !isSher && !isScene &&
+    !isNabard && !isFire && !isJadval && !isPic && !isLudo && !isSher && !isScene && !isPc &&
     status === "playing" &&
     computePhase(state.startedAtMs, now).status === "finished"
   ) {
@@ -701,7 +747,7 @@ async function buildSnapshot(code: string): Promise<RoomSnapshot | null> {
   let answered: Record<string, number> = {};
   let phaseKey = "";
   if (
-    !isNabard && !isFire && !isJadval && !isPic && !isLudo && !isSher && !isScene && status === "playing"
+    !isNabard && !isFire && !isJadval && !isPic && !isLudo && !isSher && !isScene && !isPc && status === "playing"
   ) {
     const phase = computePhase(state.startedAtMs, Date.now());
     if (phase.status === "playing") {
@@ -843,6 +889,7 @@ export function viewFromSnapshot(
   const isLudo = room.gameSlug === LUDO_GAME_SLUG;
   const isSher = room.gameSlug === SHER_GAME_SLUG;
   const isScene = room.gameSlug === SCENE_GAME_SLUG;
+  const isPc = room.gameSlug === PC_GAME_SLUG;
   const onlineCutoff = now - ONLINE_MS;
 
   const members: ArenaMemberView[] = snap.members.map((m) => ({
@@ -968,6 +1015,21 @@ export function viewFromSnapshot(
     }
   }
 
+  /* نمای «ضرب‌المثل‌چین» — ضرب‌المثل فقط برای چینش‌گر دور جاری در فاز چیدمان */
+  let proverb: import("@/lib/proverb-shared").PcView | null = null;
+  if (isPc && (room.status === "playing" || room.status === "finished")) {
+    const pc = parsePcState(snap.rawState);
+    if (pc) {
+      const pcMembers = snap.members.map((m) => ({
+        id: m.id,
+        name: m.name,
+        bot: isBotId(m.id),
+        online: isBotId(m.id) || m.lastSeenMs >= onlineCutoff,
+      }));
+      proverb = buildPcView(pc, memberId, pcMembers, now);
+    }
+  }
+
   return {
     now,
     me: memberId,
@@ -990,6 +1052,7 @@ export function viewFromSnapshot(
     ludo,
     sher,
     scene,
+    proverb,
   };
 }
 

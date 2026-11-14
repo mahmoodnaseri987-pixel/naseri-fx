@@ -41,6 +41,7 @@ import { PIC_GAME_SLUG } from "@/lib/pic-shared";
 import { LUDO_GAME_SLUG, LUDO_MAX_PLAYERS } from "@/lib/ludo-shared";
 import { SHER_CATEGORIES, SHER_GAME_SLUG, type SherCategory } from "@/lib/sher-shared";
 import { SCENE_DIFF_FIRST_POINTS, SCENE_DIFFS, SCENE_GAME_SLUG, SCENE_MODES, type SceneDifficulty, type SceneMode } from "@/lib/scene-shared";
+import { PC_GAME_SLUG, PC_MODES, type PcMode } from "@/lib/proverb-shared";
 import type { ArenaGameConfigView, ArenaRoomSummary, MemberInfo } from "@/lib/types";
 
 /* کارت ویژهٔ «میدان آتش آفلاین» که از پنل هم قابل حذف است */
@@ -72,11 +73,13 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
   const [sherMode, setSherMode] = useState(false); // جدول: حالت شرح‌در‌متن
   const [sceneMode, setSceneMode] = useState<SceneMode>("classic"); // صحنه‌گردان: حالت بازی
   const [sceneDifficulty, setSceneDifficulty] = useState<SceneDifficulty>("easy"); // صحنه‌گردان: سختی و امتیاز
+  const [pcMode, setPcMode] = useState<PcMode>("classic"); // ضرب‌المثل‌چین: حالت بازی
 
   /* ظرفیت مجاز بازی انتخابی — منچ حداکثر ۴ نفر (چهار رنگ) */
   const capacityMax = gameSlug === LUDO_GAME_SLUG ? LUDO_MAX_PLAYERS : MAX_PLAYERS;
   const isJadval = gameSlug === JADVAL_GAME_SLUG;
   const isScene = gameSlug === SCENE_GAME_SLUG;
+  const isPc = gameSlug === PC_GAME_SLUG;
   useEffect(() => {
     if (playerCount > capacityMax) setPlayerCount(capacityMax);
   }, [capacityMax, playerCount]);
@@ -89,6 +92,7 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
       setSceneMode("classic");
       setSceneDifficulty("easy");
     }
+    if (!isPc) setPcMode("classic");
   }, [isScene]);
 
   const numFmt = useCallback(
@@ -148,6 +152,7 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
           jadvalSher: sherMode, // جدول: حالت شرح‌در‌متن
           sceneMode, // صحنه‌گردان: کلاسیک / ۳کادری / حذفی‌ها
           sceneDifficulty, // صحنه‌گردان: سختی و امتیاز حدس
+          pcMode, // ضرب‌المثل‌چین: کلاسیک / تلفن‌چی / ممنوعه / ناقص
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -223,6 +228,7 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
       { slug: LUDO_GAME_SLUG, title: a.gameLudo, desc: a.gameLudoDesc, icon: "dice" },
       { slug: SHER_GAME_SLUG, title: a.gameSher, desc: a.gameSherDesc, icon: "music" },
       { slug: SCENE_GAME_SLUG, title: a.gameScene, desc: a.gameSceneDesc, icon: "shapes" },
+      { slug: PC_GAME_SLUG, title: a.gameProverb, desc: a.gameProverbDesc, icon: "grid" },
     ];
     if (!gamesCfg) return all;
     const order = new Map(gamesCfg.map((g, i) => [g.slug, i]));
@@ -518,6 +524,39 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
                 </div>
                 <p className="mt-2 text-[11px] leading-5 text-zinc-500">
                   {sceneDifficulty === "hardest" ? a.scene.diffHardestHint : sceneDifficulty === "hard" ? a.scene.diffHardHint : sceneDifficulty === "easiest" ? a.scene.diffEasiestHint : a.scene.diffEasyHint}
+                </p>
+              </div>
+            )}
+
+            {/* حالت بازی ضرب‌المثل‌چین — کلاسیک، تلفن‌چی، ممنوعه، ناقص */}
+            {isPc && (
+              <div className="mt-4">
+                <p className="text-xs font-bold text-zinc-400">{a.pc.modeLabel}</p>
+                <div className="mt-2 grid grid-cols-4 gap-1.5" role="radiogroup" aria-label={a.pc.modeLabel}>
+                  {PC_MODES.map((m) => {
+                    const active = m === pcMode;
+                    return (
+                      <button
+                        key={m}
+                        type="button"
+                        role="radio"
+                        aria-checked={active}
+                        onClick={() => setPcMode(m)}
+                        className={`flex flex-col items-center gap-0.5 rounded-xl border px-1.5 py-2 text-[11px] font-bold leading-4 transition-colors ${
+                          active
+                            ? "border-sky-500/60 bg-sky-500/10 text-sky-200"
+                            : "border-zinc-800 bg-zinc-950/40 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
+                        }`}
+                      >
+                        {m === "phone" ? a.pc.modePhone : m === "banned" ? a.pc.modeBanned : m === "incomplete" ? a.pc.modeIncomplete : a.pc.modeClassic}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="mt-2 text-[11px] leading-5 text-zinc-500">
+                  {pcMode === "phone" ? a.pc.modePhoneHint : pcMode === "banned" ? a.pc.modeBannedHint : pcMode === "incomplete" ? a.pc.modeIncompleteHint : a.pc.modeClassicHint}
+                  {" "}
+                  <span className="text-zinc-600">· {a.pc.modeTeamsSoon}</span>
                 </p>
               </div>
             )}
