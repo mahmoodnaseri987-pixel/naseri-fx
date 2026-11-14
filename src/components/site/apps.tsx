@@ -148,7 +148,7 @@ export function Apps({ apps, contacts, content = {} }: AppsProps) {
                   <p className="mt-1 text-xs font-medium text-emerald-400/90">{category}</p>
                   <p className="mt-3 flex-1 text-sm leading-7 text-zinc-400">{description}</p>
 
-                  <div className="mt-5 flex items-center gap-1.5 text-xs text-zinc-500">
+                  <div className="mt-5 flex items-center gap-1.5 text-xs text-zinc-400">
                     <Download className="h-3.5 w-3.5" aria-hidden="true" />
                     <span>
                       {installs} {t.apps.installs}
@@ -209,7 +209,7 @@ export function Apps({ apps, contacts, content = {} }: AppsProps) {
                 {t.apps.soonBadge}
               </span>
               <h3 className="mt-3 text-lg font-bold text-zinc-200">{t.apps.soonTitle}</h3>
-              <p className="mt-2 text-sm leading-7 text-zinc-500">{t.apps.soonDesc}</p>
+              <p className="mt-2 text-sm leading-7 text-zinc-400">{t.apps.soonDesc}</p>
               <Button
                 asChild
                 size="sm"

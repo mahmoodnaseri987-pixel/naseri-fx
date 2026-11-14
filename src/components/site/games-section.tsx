@@ -95,7 +95,7 @@ export function GamesSection({ games }: GamesSectionProps) {
                     </div>
                     <p className="mt-2 flex-1 text-sm leading-7 text-zinc-400">{description}</p>
 
-                    <div className="mt-3 flex items-center gap-1.5 text-xs text-zinc-500">
+                    <div className="mt-3 flex items-center gap-1.5 text-xs text-zinc-400">
                       <Gamepad2 className="h-3.5 w-3.5" aria-hidden="true" />
                       <span>
                         {new Intl.NumberFormat(lang === "fa" ? "fa-IR" : "en-US").format(game.plays)}{" "}
