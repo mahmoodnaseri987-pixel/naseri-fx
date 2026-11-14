@@ -20,6 +20,7 @@ export const metadata: Metadata = {
   authors: [{ name: "محمود ناصری" }],
   icons: {
     icon: "/favicon.svg",
+    apple: "/apple-touch-icon.png",
   },
   openGraph: {
     title: "کافه سرگرمی | محمود ناصری",
@@ -27,6 +28,20 @@ export const metadata: Metadata = {
     siteName: "کافه سرگرمی",
     type: "website",
     locale: "fa_IR",
+    images: [
+      {
+        url: "/og.png",
+        width: 1200,
+        height: 630,
+        alt: "کافه سرگرمی — بازی‌های گروهی زنده و اپلیکیشن‌های محمود ناصری",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "کافه سرگرمی | محمود ناصری",
+    description: "بازی‌های گروهی زنده، اپلیکیشن‌های کاربردی و سرگرمی فارسی.",
+    images: ["/og.png"],
   },
 };
 
