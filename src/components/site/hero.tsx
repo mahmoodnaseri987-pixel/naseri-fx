@@ -69,8 +69,7 @@ export function Hero({ content = {}, bannerUrl }: HeroProps) {
           </div>
 
           <h1
-            {...fi(0.12)}
-            className="fi-anim mt-6 text-4xl font-extrabold leading-[1.3] tracking-tight text-zinc-50 sm:text-6xl sm:leading-[1.25]"
+            className="mt-6 text-4xl font-extrabold leading-[1.3] tracking-tight text-zinc-50 sm:text-6xl sm:leading-[1.25]"
           >
             {pickText(content, `hero_title_a_${lang}`, t.hero.titleA)}
             <br />
@@ -80,8 +79,7 @@ export function Hero({ content = {}, bannerUrl }: HeroProps) {
           </h1>
 
           <p
-            {...fi(0.24)}
-            className="fi-anim mx-auto mt-6 max-w-2xl text-base leading-8 text-zinc-400 sm:text-lg sm:leading-9"
+            className="mx-auto mt-6 max-w-2xl text-base leading-8 text-zinc-400 sm:text-lg sm:leading-9"
           >
             {pickText(content, `hero_subtitle_${lang}`, t.hero.subtitle)}
           </p>

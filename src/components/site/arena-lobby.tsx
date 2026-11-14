@@ -251,7 +251,7 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-20">
-      <FadeIn className="text-center">
+      <div className="text-center">
         <span className="inline-flex items-center gap-2 text-sm font-semibold text-violet-400">
           <Swords className="h-4 w-4" aria-hidden="true" />
           {a.badge}
@@ -269,7 +269,7 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
           />
           {lang === "fa" ? "خوش آمدی" : "Welcome"}، <b className="text-zinc-200">{member.name}</b>
         </p>
-      </FadeIn>
+      </div>
 
       {/* بنر عکس پروفایل اجباری برای اعضای قدیمی بدون عکس */}
       {!member.avatarUrl && (
@@ -363,7 +363,7 @@ export function ArenaLobby({ member }: { member: MemberInfo }) {
                     )}
                     {g.title}
                   </span>
-                  <span className="mt-1 block text-[11px] leading-5 text-zinc-500">{g.desc}</span>
+                  <span className="mt-1 block text-[11px] leading-5 text-zinc-400">{g.desc}</span>
                 </button>
               ))}
             </div>
