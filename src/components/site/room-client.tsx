@@ -576,6 +576,11 @@ export function RoomClient({ code }: { code: string }) {
             {a.sher.lobbyHint}
           </p>
         )}
+        {st.room.gameSlug === PC_GAME_SLUG && (
+          <p className="mt-8 rounded-2xl border border-amber-500/30 bg-amber-500/[0.06] px-4 py-3.5 text-center text-xs leading-6 text-zinc-300">
+            {a.pc.lobbyHint}
+          </p>
+        )}
         <section className="mt-6 h-[460px] overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/60">
           <ChatPanel scope={code} className="h-full" />
         </section>

@@ -67,6 +67,7 @@ export function SiteHeader({ logoUrl }: SiteHeaderProps) {
     { label: t.nav.apps, href: "#apps" },
     { label: t.nav.games, href: "/games" },
     { label: t.nav.arena, href: "/arena" },
+    { label: t.nav.records, href: "/records" },
     { label: t.nav.about, href: "#about" },
     { label: t.nav.contact, href: "#contact" },
   ];

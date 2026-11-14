@@ -4,6 +4,7 @@ import Image from "next/image";
 
 import { Terminal, Settings2 } from "lucide-react";
 import { useLang } from "@/components/site/language-provider";
+import { APP_VERSION } from "@/lib/version";
 
 type SiteFooterProps = {
   logoUrl?: string;
@@ -70,6 +71,8 @@ export function SiteFooter({ logoUrl }: SiteFooterProps) {
             <Settings2 className="h-3.5 w-3.5" aria-hidden="true" />
             {t.footer.admin}
           </a>
+          <span aria-hidden="true" className="h-3 w-px bg-zinc-800" />
+          <span className="font-mono text-xs text-zinc-500">{APP_VERSION}</span>
         </div>
       </div>
     </footer>
