@@ -4,7 +4,9 @@
    میزبان هر ~۱ ثانیه اسنپ‌شات مرجع می‌فرستد تا خطای ممیز شناور مرورگرها اصلاح شود.
    این فایل نباید به DOM وابسته باشد (سمت سرور هم ایمپورت می‌شود). */
 
-export const NABARD_GAME_SLUG = "nabard-live";
+import { NABARD_GAME_SLUG } from "./game-slugs";
+
+export { NABARD_GAME_SLUG };
 
 export const ARENA_R = 500; // شعاع مجازی آرنا
 export const RAY_SLOTS = 12; // جایگاه خط‌های دور دایره

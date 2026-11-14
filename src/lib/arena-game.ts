@@ -4,7 +4,9 @@
    بانک سؤال: ۲۵۲ سؤال یکتا در ۱۰ دسته به‌علاوهٔ «بانک سؤال» دیتابیسی پنل مدیریت
    (اطلاعات عمومی)؛ هر مسابقه از همه دسته‌ها سؤال می‌گیرد. */
 
-export const ARENA_GAME_SLUG = "speed-challenge";
+import { ARENA_GAME_SLUG } from "./game-slugs";
+
+export { ARENA_GAME_SLUG };
 
 export const ROUND_COUNT = 20; // تعداد سؤال هر مسابقه
 export const ANSWER_MS = 10_000; // مدت زمان پاسخ‌دادن به هر سؤال

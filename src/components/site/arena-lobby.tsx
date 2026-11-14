@@ -32,11 +32,15 @@ import { MemberAvatar } from "@/components/site/member-avatar";
 import { AvatarPicker } from "@/components/site/avatar-picker";
 import { ChatPanel } from "@/components/site/chat-panel";
 import { subscribeStream } from "@/lib/realtime";
-import { ARENA_GAME_SLUG, AGE_GROUPS, MAX_PLAYERS, MIN_PLAYERS, type AgeGroup } from "@/lib/arena-game";
-import { NABARD_GAME_SLUG } from "@/lib/nabard-engine";
-import { JADVAL_GAME_SLUG } from "@/lib/jadval-shared";
-import { PIC_GAME_SLUG } from "@/lib/pic-shared";
-import { LUDO_GAME_SLUG, LUDO_MAX_PLAYERS } from "@/lib/ludo-shared";
+import { AGE_GROUPS, MAX_PLAYERS, MIN_PLAYERS, type AgeGroup } from "@/lib/arena-game";
+import { LUDO_MAX_PLAYERS } from "@/lib/ludo-shared";
+import {
+  ARENA_GAME_SLUG,
+  JADVAL_GAME_SLUG,
+  LUDO_GAME_SLUG,
+  NABARD_GAME_SLUG,
+  PIC_GAME_SLUG,
+} from "@/lib/game-slugs";
 import { SHER_CATEGORIES, SHER_GAME_SLUG, type SherCategory } from "@/lib/sher-shared";
 import { PC_GAME_SLUG, PC_MODES, type PcMode } from "@/lib/proverb-shared";
 import type { ArenaGameConfigView, ArenaRoomSummary, MemberInfo } from "@/lib/types";

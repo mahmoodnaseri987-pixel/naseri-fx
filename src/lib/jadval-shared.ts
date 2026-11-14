@@ -2,7 +2,7 @@
    این فایل هیچ داده‌ای از بانک جدول‌ها ندارد؛ پاسخ‌ها فقط در
    jadval-engine.ts (سمت سرور) زندگی می‌کنند و هرگز به کلاینت نمی‌رسند. */
 
-export const JADVAL_GAME_SLUG = "jadval-race";
+export { JADVAL_GAME_SLUG } from "./game-slugs";
 
 export const JADVAL_MATCH_MS = 20 * 60 * 1000; // طول مسابقه: ۲۰ دقیقه
 export const JADVAL_WRONG_LOCK_MS = 30_000; // قفل تیم پس از هر پاسخ نادرست

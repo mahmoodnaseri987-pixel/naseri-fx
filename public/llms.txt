@@ -1,0 +1,20 @@
+# کافه سرگرمی (Kafe Sergermi)
+
+> محیط سرگرمی و بازی گروهی فارسی به مدیریت محمود ناصری — اتاق‌های رقابتی زنده، بازی‌های تک‌به‌تک و گروهی با ربات‌های هوشمند، چت زنده، عکس نمایهٔ اعضا و آمار زنده. مکمل پادکست/سری آموزشی «آپ‌های کاری زوم فارسی» (pun). A Persian entertainment hub for live competitive games; most pages require free member sign-in (sign-up takes under 30 seconds with just a name and photo).
+
+## صفحه‌های اصلی
+
+- [خانه](https://mahmoudnaseri.vercel.app/): نمای کلی سایت — اپلیکیشن‌های آموزشی/ابزاری، بازی‌ها، نقشهٔ راه و راه‌های تماس (نیاز به ورود عضو)
+- [آرنا](https://mahmoudnaseri.vercel.app/arena): لابی اتاق‌های رقابتی — ساخت اتاق، ورود با کد، بازی با تا ۸ نفر یا ربات، امتیاز زنده (نیاز به ورود)
+- [بازی‌ها](https://mahmoudnaseri.vercel.app/games): فهرست کامل بازی‌های کافه (نیاز به ورود)
+- [میدان آتش](https://mahmoudnaseri.vercel.app/fire): بازی آتش افزار نسخهٔ تک‌نفرهٔ آفلاین (بدون نیاز به ورود)
+- [میدان آتش آنلاین](https://mahmoudnaseri.vercel.app/fire/online): نسخهٔ رقابتی آنلاین میدان آتش (نیاز به ورود)
+- [ورود / ثبت‌نام](https://mahmoudnaseri.vercel.app/login): عضویت با نام و عکس؛ بدون ایمیل و رمز پیچیده
+
+## بازی‌ها
+
+- [چالش سرعتی](https://mahmoudnaseri.vercel.app/play/speed-challenge): سؤال‌های سریع تک‌به‌تک با ربات یا حریف انسانی
+- [رقابت جدول](https://mahmoudnaseri.vercel.app/play/jadval-race): رقابت جدول دانشی با ربات‌ها و تنظیم سختی
+- [منع گرومی](https://mahmoudnaseri.vercel.app/play/pic-guess): حدس عکس‌های مبهم — جنسیت‌خنثی و فراگیر
+- [لودو](https://mahmoudnaseri.vercel.app/play/ludo): لودوی کلاسیک تا ۴ نفر با ربات
+- [ضرب‌المثل‌چین](https://mahmoudnaseri.vercel.app/play/proverb-pc): بازی گروهی ضرب‌المثل و کلمات

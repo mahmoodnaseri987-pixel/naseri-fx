@@ -3,7 +3,7 @@
    پاسخ‌ها فقط در pic-engine.ts (سمت سرور) زندگی می‌کنند و در فاز پاسخ‌دهی
    هرگز به کلاینت نمی‌رسند. */
 
-export const PIC_GAME_SLUG = "pic-guess";
+export { PIC_GAME_SLUG } from "./game-slugs";
 
 export const PIC_ROUNDS = 12; // تعداد دورهای هر مسابقه
 export const PIC_ROUND_MS = 20_000; // پنجرهٔ پاسخ‌دهی هر دور

@@ -5,7 +5,9 @@
    بنابراین سرور مرجع واحد است؛ هیچ بازیکنی (حتی میزبان) مزیت ندارد.
    این فایل نباید به DOM وابسته باشد. */
 
-export const FIRE_GAME_SLUG = "fire-arena";
+import { FIRE_GAME_SLUG } from "./game-slugs";
+
+export { FIRE_GAME_SLUG };
 
 /* ---------- ثابت‌های میدان ---------- */
 export const MAP_W = 1280;
