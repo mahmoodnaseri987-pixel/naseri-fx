@@ -1,10 +1,8 @@
 import type { Metadata, Viewport } from "next";
-import { redirect } from "next/navigation";
 import { LanguageProvider } from "@/components/site/language-provider";
 import { FireOffline } from "@/components/site/fire-offline";
 import { PhotoGate } from "@/components/site/photo-gate";
 import { getCurrentMember } from "@/lib/member-auth";
-import { getAuthed } from "@/lib/admin";
 import { ensureSetup } from "@/lib/public-data";
 
 export const metadata: Metadata = {
@@ -27,11 +25,8 @@ export const dynamic = "force-dynamic";
 export default async function FirePage() {
   await ensureSetup();
 
-  /* گیت عضویت — اعضای مهمان به صفحه ورود هدایت می‌شوند؛ مدیر برای پیش‌نمایش مجاز است */
-  const [member, adminAuthed] = await Promise.all([getCurrentMember(), getAuthed()]);
-  if (!member && !adminAuthed) {
-    redirect("/login?next=/fire");
-  }
+  /* صفحهٔ عمومی است — عضو برای گیت عکس بررسی می‌شود؛ مهمان مستقیم بازی می‌کند */
+  const member = await getCurrentMember();
 
   return (
     <LanguageProvider>

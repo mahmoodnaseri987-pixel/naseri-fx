@@ -23,10 +23,15 @@ export function middleware(req: NextRequest) {
     pathname === "/admin" ||
     pathname.startsWith("/admin/") ||
     pathname === "/sher-admin" ||
-    pathname.startsWith("/sher-admin/")
+    pathname.startsWith("/sher-admin/") ||
+    pathname === "/" ||
+    pathname === "/fire"
   ) {
     return NextResponse.next();
   }
+
+  /* صفحات عمومی دیگر: صفحهٔ اصلی (ویترین سایت برای گوگل و بازدیدکنندهٔ
+     تازه‌وارد) و میدان آتشِ آفلاینِ تک‌نفره (بدون دادهٔ عضو، بدون نیاز به ورود) */
 
   /* عضو واردشده — عبور آزاد */
   if (req.cookies.get(MEMBER_COOKIE)?.value) {
