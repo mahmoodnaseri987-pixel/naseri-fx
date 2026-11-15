@@ -654,7 +654,9 @@ export function buildRbView(
 
   return {
     me: meId,
-    myHand: me ? me.hand : [],
+    /* کپی دست — خودِ آرایهٔ زندهٔ state را برنگردان؛ splice/push مرجع را عوض نمی‌کند
+       و useMemoهای کلاینت که به myHand وابسته‌اند دیگر محاسبه نمی‌کنند (بادبزن منجمد می‌شود) */
+    myHand: me ? [...me.hand] : [],
     playableIds,
     players,
     top: topOf(st),
@@ -672,7 +674,7 @@ export function buildRbView(
     settings: st.s,
     phase: st.phase,
     result: st.result,
-    log: st.log,
+    log: [...st.log], // کپی — گزارش هم آرایهٔ زندهٔ state است
     turnRemainMs: st.s.turnMs > 0 ? Math.max(0, st.s.turnMs - (now - st.tStart)) : 0,
     turn: st.turn,
   };
