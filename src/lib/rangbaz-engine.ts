@@ -114,14 +114,15 @@ function advance(st: RbState, steps: number, ctx: Ctx) {
   st.drewId = null;
 }
 
-function drawOne(st: RbState): RbCard {
+function drawOne(st: RbState): RbCard | null {
   if (st.deck.length === 0) {
     /* بازسازی دک از دورریز — کارت رو می‌ماند */
     const top = st.pile.pop();
     st.deck = rbShuffle(st.pile);
     st.pile = top ? [top] : [];
   }
-  return st.deck.pop() as RbCard;
+  /* اگر دک و دورریز هر دو خالی باشند (همهٔ کارت‌ها دست بازیکن‌هاست) کارتی نیست */
+  return st.deck.pop() ?? null;
 }
 
 function topOf(st: RbState): RbCard | null {
@@ -203,7 +204,7 @@ export function rbPlay(
 
   switch (card.k) {
     case "skip": {
-      pushLog(st, `⛔ ${nameOf(stepsTo(st, 1))} نوبتش سوخت`);
+      pushLog(st, `⛔ ${st.ps[stepsTo(st, 1)]?.name ?? "؟"} نوبتش سوخت`);
       advance(st, 2, ctx);
       break;
     }
@@ -221,7 +222,10 @@ export function rbPlay(
         advance(st, 1, ctx);
       } else {
         const victim = st.ps[stepsTo(st, 1)];
-        for (let i = 0; i < 2; i++) victim.hand.push(drawOne(st));
+        for (let i = 0; i < 2; i++) {
+          const c = drawOne(st);
+          if (c) victim.hand.push(c);
+        }
         pushLog(st, `➕ ${victim.name} دو کارت جریمه گرفت و نوبتش سوخت`);
         advance(st, 2, ctx);
       }
@@ -235,16 +239,20 @@ export function rbPlay(
         advance(st, 1, ctx);
       } else {
         const victim = st.ps[stepsTo(st, 1)];
-        for (let i = 0; i < 4; i++) victim.hand.push(drawOne(st));
+        for (let i = 0; i < 4; i++) {
+          const c = drawOne(st);
+          if (c) victim.hand.push(c);
+        }
         pushLog(st, `➕ ${victim.name} چهار کارت جریمه گرفت`);
         advance(st, 2, ctx);
       }
       break;
     }
     case "mirror": {
-      /* کارت قبلی پشته به دستِ اندازنده‌اش برمی‌گردد */
-      if (st.pile.length >= 2 && prevPlay && prevPlay.id !== playerId) {
-        const prev = st.pile[st.pile.length - 2];
+      /* کارت قبلی پشته به دستِ اندازنده‌اش برمی‌گردد — اما آینه روی آینه
+         اثر ندارد وگرنه دو آینه می‌توانند تا بی‌نهایت هم را برگردانند */
+      const prev = st.pile.length >= 2 ? st.pile[st.pile.length - 2] : null;
+      if (st.pile.length >= 2 && prevPlay && prevPlay.id !== playerId && prev?.k !== "mirror") {
         const owner = prevPlay.id;
         st.pile.splice(st.pile.length - 2, 1);
         handOf(st, owner)?.hand.push(prev);
@@ -313,9 +321,16 @@ export function rbDrawOrPass(st: RbState, playerId: string, ctx: Ctx): { ok: boo
   if (st.ps[st.cur]?.id !== playerId) return { ok: false, reason: "not-turn" };
 
   if (st.pend > 0) {
-    /* گرفتن جریمهٔ جمع‌شده */
-    for (let i = 0; i < st.pend; i++) p.hand.push(drawOne(st));
-    pushLog(st, `📤 ${p.name} ${st.pend} کارت جریمه گرفت`);
+    /* گرفتن جریمهٔ جمع‌شده — اگر کارتی برای کشیدن نمانده باشد، هر چه هست گرفته می‌شود */
+    let taken = 0;
+    for (let i = 0; i < st.pend; i++) {
+      const c = drawOne(st);
+      if (c) {
+        p.hand.push(c);
+        taken += 1;
+      }
+    }
+    pushLog(st, `📤 ${p.name} ${taken} کارت جریمه گرفت`);
     st.pend = 0;
     st.pendK = null;
     advance(st, 1, ctx);
@@ -324,6 +339,12 @@ export function rbDrawOrPass(st: RbState, playerId: string, ctx: Ctx): { ok: boo
 
   if (!st.drew) {
     const card = drawOne(st);
+    if (!card) {
+      /* نه دکی مانده نه دورریز — فقط گذر */
+      pushLog(st, `⏭ ${p.name} گذر کرد (کارتی برای کشیدن نمانده)`);
+      advance(st, 1, ctx);
+      return { ok: true };
+    }
     p.hand.push(card);
     pushLog(st, `🃏 ${p.name} کارت کشید`);
     if (rbPlayable(card, st)) {
@@ -367,7 +388,10 @@ export function rbCatch(st: RbState, catcherId: string, ctx: Ctx): { ok: boolean
   const catcher = handOf(st, catcherId);
   const victim = handOf(st, target);
   if (!catcher || !victim) return { ok: false, reason: "no-player" };
-  for (let i = 0; i < 2; i++) victim.hand.push(drawOne(st));
+  for (let i = 0; i < 2; i++) {
+    const c = drawOne(st);
+    if (c) victim.hand.push(c);
+  }
   st.callOpen = null;
   pushLog(st, `📢 ${catcher.name} ${victim.name} را لو داد — دو کارت جریمه!`);
   return { ok: true };

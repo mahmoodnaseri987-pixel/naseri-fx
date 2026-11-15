@@ -16,6 +16,7 @@ import { RangbazTable, RbCardArt } from "@/components/site/rangbaz-table";
 import {
   buildRbView,
   rbBotMove,
+  rbCall,
   rbCatch,
   rbCreateState,
   rbDrawOrPass,
@@ -279,6 +280,17 @@ export function RangbazSolo() {
     setMode("menu");
   };
 
+  /* تیک دوره‌ای سولو — انقضای نوبت ۱۰ثانیه‌ای و پنجرهٔ لو دادن حتی وقتی
+     بازیکن بی‌حرکت است؛ بدون این، در مراحل fastTurn بازی برای همیشه می‌ایستد */
+  const inGame = mode !== "menu";
+  useEffect(() => {
+    if (!inGame) return;
+    const id = setInterval(() => {
+      if (stRef.current?.phase === "play") sync();
+    }, 500);
+    return () => clearInterval(id);
+  }, [inGame, sync]);
+
   /* ─────────── منو ─────────── */
   if (mode === "menu" || !view) {
     const dailyToday = stats.dailyKey === String(dailySeed());
@@ -526,6 +538,12 @@ export function RangbazSolo() {
         act(() => {
           const st = stRef.current;
           if (st) rbCatch(st, "me-solo", { now: Date.now() });
+        })
+      }
+      onCall={() =>
+        act(() => {
+          const st = stRef.current;
+          if (st) rbCall(st, "me-solo", { now: Date.now() });
         })
       }
       onAgain={() => {

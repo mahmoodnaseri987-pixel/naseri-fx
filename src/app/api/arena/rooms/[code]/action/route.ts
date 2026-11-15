@@ -99,7 +99,7 @@ import {
   pcValidateBoard,
   pcVote,
 } from "@/lib/proverb-engine";
-import { RB_GAME_SLUG, rbParseState } from "@/lib/rangbaz-shared";
+import { RB_GAME_SLUG, rbParseState, type RbState } from "@/lib/rangbaz-shared";
 import {
   rbCall,
   rbCatch,
@@ -150,6 +150,49 @@ function roomAgeGroup(room: { ageGroup: string; state: string }) {
   const meta = safeStateMeta(room.state);
   if (meta.ageGroup !== undefined) return normalizeAgeGroup(meta.ageGroup);
   return normalizeAgeGroup(room.ageGroup);
+}
+
+/** اجرای یک اکشن «رنگ‌باز» با تلاش مجدد — اگر بین خواندن و نوشتن، تیک استریم
+    یا بازیکن دیگری وضعیت را جابه‌جا کند، نوشتن با گارد seq رد می‌شود؛ به‌جای
+    خطای «انجام نشد» به کاربر، وضعیت تازه می‌خوانیم و همان اکشن را دوباره می‌زنیم.
+    اگر اکشن دست را تمام کند، وضعیت اتاق همین‌جا قطعی به finished می‌رود تا
+    «دست دوباره»ی میزبان بی‌درنگ کار کند و امتیازها یک‌بار نوشته شوند. */
+async function rbActionWithRetry(
+  roomId: string,
+  roomCode: string,
+  act: (st: RbState, now: number) => { ok: boolean; reason?: string },
+): Promise<{ ok: boolean; reason?: string }> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const row = await db.room.findUnique({
+      where: { id: roomId },
+      select: { state: true, status: true },
+    });
+    if (!row || row.status !== "playing") return { ok: false, reason: "conflict" };
+    const st = rbParseState(row.state);
+    if (!st) return { ok: false, reason: "gone" };
+    rbTick(st, { now: Date.now() });
+    if (st.phase !== "play") return { ok: false, reason: "conflict" };
+    const outcome = act(st, Date.now());
+    if (!outcome.ok) return outcome;
+    const persisted = await persistRbState(roomId, st);
+    if (!persisted) continue; // ریس seq — وضعیت تازه و تلاش دوباره
+    if (st.result) {
+      await db.room.update({
+        where: { id: roomId },
+        data: { status: "finished", state: JSON.stringify(st), lastActivity: new Date() },
+      });
+      for (const row of st.result.rows) {
+        await db.roomMember.updateMany({
+          where: { roomId, memberId: row.id },
+          data: { score: row.score },
+        });
+      }
+      invalidateRoomSnapshot(roomCode);
+    }
+    invalidateRoomSnapshot(roomCode);
+    return { ok: true };
+  }
+  return { ok: false, reason: "conflict" };
 }
 
 export async function POST(
@@ -1365,91 +1408,54 @@ export async function POST(
 
     /* --- بازی کردن کارت (رنگ انتخابی، هدف تعویض، اعلام رنگ‌باز) --- */
     if (type === "rb_play") {
-      if (room.status !== "playing") {
-        return NextResponse.json({ error: "conflict" }, { status: 409 });
-      }
-      const rbState = rbParseState(room.state);
-      if (!rbState) return NextResponse.json({ error: "gone" }, { status: 404 });
-      rbTick(rbState, { now: Date.now() });
-      if (rbState.phase !== "play") {
-        return NextResponse.json({ error: "conflict" }, { status: 409 });
-      }
-      const outcome = rbPlay(
-        rbState,
-        me.memberId,
-        typeof body.cardId === "string" ? body.cardId : "",
-        {
-          color: typeof body.color === "string" ? body.color : undefined,
-          targetId: typeof body.targetId === "string" ? body.targetId : undefined,
-          call: body.call === true,
-        },
-        { now: Date.now() },
+      const outcome = await rbActionWithRetry(room.id, room.code, (st, now) =>
+        rbPlay(
+          st,
+          me.memberId,
+          typeof body.cardId === "string" ? body.cardId : "",
+          {
+            color: typeof body.color === "string" ? body.color : undefined,
+            targetId: typeof body.targetId === "string" ? body.targetId : undefined,
+            call: body.call === true,
+          },
+          { now },
+        ),
       );
       if (!outcome.ok) {
         return NextResponse.json({ error: outcome.reason ?? "conflict" }, { status: 409 });
-      }
-      const persisted = await persistRbState(room.id, rbState);
-      invalidateRoomSnapshot(room.code);
-      if (!persisted) {
-        return NextResponse.json({ error: "conflict" }, { status: 409 });
       }
       return NextResponse.json({ ok: true });
     }
 
     /* --- کشیدن کارت / گرفتن جریمه / گذر --- */
     if (type === "rb_draw") {
-      if (room.status !== "playing") {
-        return NextResponse.json({ error: "conflict" }, { status: 409 });
-      }
-      const rbState = rbParseState(room.state);
-      if (!rbState) return NextResponse.json({ error: "gone" }, { status: 404 });
-      rbTick(rbState, { now: Date.now() });
-      const outcome = rbDrawOrPass(rbState, me.memberId, { now: Date.now() });
+      const outcome = await rbActionWithRetry(room.id, room.code, (st, now) =>
+        rbDrawOrPass(st, me.memberId, { now }),
+      );
       if (!outcome.ok) {
         return NextResponse.json({ error: outcome.reason ?? "conflict" }, { status: 409 });
-      }
-      const persisted = await persistRbState(room.id, rbState);
-      invalidateRoomSnapshot(room.code);
-      if (!persisted) {
-        return NextResponse.json({ error: "conflict" }, { status: 409 });
       }
       return NextResponse.json({ ok: true });
     }
 
     /* --- گفتن «رنگ‌باز!» با یک کارت باقی‌مانده --- */
     if (type === "rb_call") {
-      if (room.status !== "playing") {
-        return NextResponse.json({ error: "conflict" }, { status: 409 });
-      }
-      const rbState = rbParseState(room.state);
-      if (!rbState) return NextResponse.json({ error: "gone" }, { status: 404 });
-      const outcome = rbCall(rbState, me.memberId, { now: Date.now() });
+      const outcome = await rbActionWithRetry(room.id, room.code, (st, now) =>
+        rbCall(st, me.memberId, { now }),
+      );
       if (!outcome.ok) {
         return NextResponse.json({ error: outcome.reason ?? "conflict" }, { status: 409 });
-      }
-      const persisted = await persistRbState(room.id, rbState);
-      invalidateRoomSnapshot(room.code);
-      if (!persisted) {
-        return NextResponse.json({ error: "conflict" }, { status: 409 });
       }
       return NextResponse.json({ ok: true });
     }
 
     /* --- لو دادن بازیکنی که رنگ‌باز نگفته --- */
     if (type === "rb_catch") {
-      if (room.status !== "playing") {
-        return NextResponse.json({ error: "conflict" }, { status: 409 });
-      }
-      const rbState = rbParseState(room.state);
-      if (!rbState) return NextResponse.json({ error: "gone" }, { status: 404 });
-      const outcome = rbCatch(rbState, me.memberId, { now: Date.now() });
+      const outcome = await rbActionWithRetry(room.id, room.code, (st, now) =>
+        rbCatch(st, me.memberId, { now }),
+      );
       if (!outcome.ok) {
         return NextResponse.json({ error: outcome.reason ?? "conflict" }, { status: 409 });
-      }
-      const persisted = await persistRbState(room.id, rbState);
-      invalidateRoomSnapshot(room.code);
-      if (!persisted) {
-        return NextResponse.json({ error: "conflict" }, { status: 409 });
       }
       return NextResponse.json({ ok: true });
     }

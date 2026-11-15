@@ -702,20 +702,6 @@ export function RangbazTable({ view, fa, busy, onPlay, onDrawPass, onCall, onCat
               ))}
             </div>
           )}
-
-          {canCatch && (
-            <div className="absolute -bottom-6 left-1/2 z-10 -translate-x-1/2">
-              <button
-                type="button"
-                disabled={busy || !onCatch}
-                onClick={() => onCatch?.()}
-                className="rounded-full bg-rose-500 px-5 py-2.5 text-xs font-black text-zinc-950"
-                style={{ boxShadow: "0 0 24px rgba(244,63,94,.55)", animation: "rbPulseRose 1.1s ease-in-out infinite" }}
-              >
-                📢 {fa ? `لو رفت! ${view.callOpen?.name} رنگ‌باز نگفت` : "They forgot!"}
-              </button>
-            </div>
-          )}
         </div>
       </div>
 
@@ -766,6 +752,17 @@ export function RangbazTable({ view, fa, busy, onPlay, onDrawPass, onCall, onCat
             }}
           >
             {armedCall ? (fa ? "🔔 رنگ‌باز مسلح شد!" : "🔔 armed!") : fa ? "🔔 رنگ‌باز!" : "🔔 one left!"}
+          </button>
+        )}
+        {canCatch && (
+          <button
+            type="button"
+            disabled={busy || !onCatch}
+            onClick={() => onCatch?.()}
+            className="rounded-full bg-rose-500 px-5 py-2.5 text-xs font-black text-zinc-950 active:scale-95"
+            style={{ boxShadow: "0 0 24px rgba(244,63,94,.55)", animation: "rbPulseRose 1.1s ease-in-out infinite" }}
+          >
+            📢 {fa ? `${view.callOpen?.name} رنگ‌باز نگفت — لو بده!` : `${view.callOpen?.name} forgot — catch!`}
           </button>
         )}
         {showLateCall && onCall && (
