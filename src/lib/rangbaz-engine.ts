@@ -151,6 +151,25 @@ function handOf(st: RbState, id: string): RbPlayer | null {
   return st.ps.find((p) => p.id === id) ?? null;
 }
 
+/* ---------- قانون «تک کارت» ----------
+   بازیکنی که با یک کارتِ باقی‌مانده «رنگ‌باز!» نگفته، تا قبل از اینکه
+   دوباره نوبتش برسد باید بگوید؛ وگرنه در لحظهٔ برگشتن نوبتش یک کارت جریمه می‌شود. */
+function maybeUncalledPenalty(st: RbState): boolean {
+  const u = st.uncalled;
+  if (!u) return false;
+  const p = handOf(st, u.id);
+  if (!p || p.hand.length !== 1) {
+    st.uncalled = null;
+    return false;
+  }
+  if (st.ps[st.cur]?.id !== u.id || st.turn <= u.turn) return false;
+  st.uncalled = null;
+  const c = drawOne(st);
+  if (c) p.hand.push(c);
+  pushLog(st, `⏰ ${p.name} «رنگ‌باز!» نگفته بود — یک کارت جریمه شد`);
+  return true;
+}
+
 /* ---------- پایان دست ---------- */
 
 function finish(st: RbState, winnerId: string) {
@@ -182,11 +201,14 @@ export function rbPlay(
   const p = handOf(st, playerId);
   if (!p) return { ok: false, reason: "no-player" };
   if (st.ps[st.cur]?.id !== playerId) return { ok: false, reason: "not-turn" };
+  /* اگر نوبتِ تک‌کارتیِ اعلام‌نکرده برگشته باشد، جریمه قبل از حرکتش اعمال می‌شود */
+  maybeUncalledPenalty(st);
   const idx = p.hand.findIndex((c) => c.id === cardId);
   if (idx < 0) return { ok: false, reason: "no-card" };
   const card = p.hand[idx];
   if (!rbPlayable(card, st)) return { ok: false, reason: "not-playable" };
 
+  const turnAtPlay = st.turn; // شمارهٔ نوبتی که این کارت در آن انداخته شد
   const prevPlay = st.lastPlay; // صاحب کارت قبلی پشته — کارت آینه لازمش دارد
   p.hand.splice(idx, 1);
   st.pile.push(card);
@@ -272,6 +294,17 @@ export function rbPlay(
         p.hand = [...target.hand];
         target.hand = mine;
         pushLog(st, `🤝 ${p.name} دستش را با ${target.name} عوض کرد`);
+        /* اگر هدف دستِ خالی گرفت (اندازنده تک‌کارت بود)، همان لحظه برنده است */
+        if (target.hand.length === 0) {
+          finish(st, target.id);
+          return { ok: true };
+        }
+        /* اگر هدف تک‌کارت شد، همان قانون اعلام روی او هم برقرار است */
+        if (target.hand.length === 1) {
+          st.callOpen = { id: target.id, until: ctx.now + RB_CALL_WINDOW_MS };
+          st.uncalled = { id: target.id, turn: turnAtPlay };
+          pushLog(st, `🤫 ${target.name} تک‌کارت شد — باید «رنگ‌باز!» بگوید`);
+        }
       } else {
         pushLog(st, `🤝 ${p.name} کارت تعویض دست انداخت`);
       }
@@ -302,6 +335,7 @@ export function rbPlay(
       pushLog(st, `🔔 ${p.name} گفت: رنگ‌باز!`);
     } else {
       st.callOpen = { id: playerId, until: ctx.now + RB_CALL_WINDOW_MS };
+      st.uncalled = { id: playerId, turn: turnAtPlay };
       pushLog(st, `🤫 ${p.name} رنگ‌باز نگفت — می‌شود لو داد!`);
     }
   }
@@ -319,6 +353,7 @@ export function rbDrawOrPass(st: RbState, playerId: string, ctx: Ctx): { ok: boo
   const p = handOf(st, playerId);
   if (!p) return { ok: false, reason: "no-player" };
   if (st.ps[st.cur]?.id !== playerId) return { ok: false, reason: "not-turn" };
+  maybeUncalledPenalty(st);
 
   if (st.pend > 0) {
     /* گرفتن جریمهٔ جمع‌شده — اگر کارتی برای کشیدن نمانده باشد، هر چه هست گرفته می‌شود */
@@ -367,12 +402,12 @@ export function rbDrawOrPass(st: RbState, playerId: string, ctx: Ctx): { ok: boo
 export function rbCall(st: RbState, playerId: string, ctx: Ctx): { ok: boolean; reason?: string } {
   const p = handOf(st, playerId);
   if (!p || p.hand.length !== 1) return { ok: false, reason: "need-one-card" };
-  if (st.callOpen?.id !== playerId) {
-    st.called[playerId] = st.turn;
-    pushLog(st, `🔔 ${p.name} گفت: رنگ‌باز!`);
-    return { ok: true };
-  }
-  return { ok: false, reason: "too-late" };
+  /* اعلام هر وقت قبل از برگشتن نوبت معتبر است — حتی وسط پنجرهٔ لو دادن */
+  if (st.callOpen?.id === playerId) st.callOpen = null;
+  st.called[playerId] = st.turn;
+  if (st.uncalled?.id === playerId) st.uncalled = null;
+  pushLog(st, `🔔 ${p.name} گفت: رنگ‌باز!`);
+  return { ok: true };
 }
 
 /* ---------- اکشن: لو دادن ---------- */
@@ -393,6 +428,7 @@ export function rbCatch(st: RbState, catcherId: string, ctx: Ctx): { ok: boolean
     if (c) victim.hand.push(c);
   }
   st.callOpen = null;
+  if (st.uncalled?.id === target) st.uncalled = null; // لو رفت و جریمه‌اش را گرفت — جریمهٔ دوباره ندارد
   pushLog(st, `📢 ${catcher.name} ${victim.name} را لو داد — دو کارت جریمه!`);
   return { ok: true };
 }
@@ -402,6 +438,17 @@ export function rbCatch(st: RbState, catcherId: string, ctx: Ctx): { ok: boolean
 export function rbTick(st: RbState, ctx: Ctx): { mutated: boolean } {
   let mutated = false;
   if (st.phase !== "play") return { mutated: false };
+
+  /* قانون «تک کارت» — جریمهٔ اعلام‌نکرده در لحظهٔ برگشتن نوبت */
+  if (maybeUncalledPenalty(st)) mutated = true;
+  /* اگر به تک‌کارتیِ اعلام‌نکرده کارتی رسید (آینه/تعویض/جریمه)، از وضعیت اعلام خارج شده */
+  if (st.uncalled) {
+    const u = handOf(st, st.uncalled.id);
+    if (!u || u.hand.length !== 1) {
+      st.uncalled = null;
+      mutated = true;
+    }
+  }
 
   if (st.callOpen && ctx.now > st.callOpen.until) {
     st.callOpen = null;
@@ -620,6 +667,7 @@ export function buildRbView(
     drew: st.drew,
     drewPlayable: st.drewId !== null && playableIds.includes(st.drewId),
     callOpen: st.callOpen && caller ? { id: st.callOpen.id, name: caller.name, until: st.callOpen.until } : null,
+    myUncalled: st.phase === "play" && st.uncalled?.id === meId && (me?.hand.length === 1),
     fogActive,
     settings: st.s,
     phase: st.phase,

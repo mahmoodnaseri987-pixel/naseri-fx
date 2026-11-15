@@ -62,6 +62,7 @@ export type RbState = {
   drew: boolean; // این نوبت کارت کشیده و کارتش قابل بازی است
   drewId: string | null;
   callOpen: { id: string; until: number } | null; // پنجرهٔ «لو رفتن»
+  uncalled: { id: string; turn: number } | null; // تک‌کارتی که «رنگ‌باز!» نگفته — با رسیدن نوبتش جریمه می‌شود
   called: Record<string, number>; // turn که هر بازیکن رنگ‌باز گفت
   lastPlay: { id: string; cardId: string } | null; // برای کارت آینه
   fogBy: string | null;
@@ -97,6 +98,7 @@ export type RbView = {
   drew: boolean;
   drewPlayable: boolean;
   callOpen: { id: string; name: string; until: number } | null;
+  myUncalled: boolean; // من تک‌کارت دارم و «رنگ‌باز!» نگفته‌ام — تا نوبت بعدی باید بگویم
   fogActive: boolean;
   settings: RbSettings;
   phase: "play" | "done";
@@ -196,6 +198,8 @@ export function rbParseState(raw: string | null | undefined): RbState | null {
   try {
     const st = JSON.parse(raw) as RbState;
     if (st && st.v === 1 && typeof st.seq === "number" && Array.isArray(st.ps) && Array.isArray(st.pile) && Array.isArray(st.deck)) {
+      /* stateهای قدیمی فیلد «uncalled» را ندارند — نرمال‌سازی */
+      if (st.uncalled === undefined) st.uncalled = null;
       return st;
     }
   } catch {

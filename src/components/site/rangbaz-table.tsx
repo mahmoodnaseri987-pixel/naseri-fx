@@ -459,7 +459,8 @@ export function RangbazTable({ view, fa, busy, onPlay, onDrawPass, onCall, onCat
   const colorMeta = RB_COLOR_META[view.color];
   const canCatch = view.callOpen && view.callOpen.id !== view.me && nowTick < view.callOpen.until;
   const showCallBtn = view.myHand.length === 2 && view.myTurn;
-  const showLateCall = view.myHand.length === 1 && view.myTurn && !view.callOpen;
+  /* دکمهٔ «رنگ‌باز» برای تک‌کارتیِ اعلام‌نکرده — تا قبل از برگشتن نوبت هر لحظه معتبر است */
+  const showLateCall = view.myHand.length === 1 && view.myUncalled;
   const timerFrac = view.settings.turnMs > 0 ? Math.max(0, Math.min(1, view.turnRemainMs / view.settings.turnMs)) : 0;
 
   const sortedHand = useMemo(() => {
@@ -785,6 +786,18 @@ export function RangbazTable({ view, fa, busy, onPlay, onDrawPass, onCall, onCat
           {muted ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
         </button>
       </div>
+
+      {/* هشدار قانون تک‌کارت — تا قبل از برگشتن نوبت باید «رنگ‌باز!» بگویی */}
+      {view.myUncalled && (
+        <p
+          className="mt-2 text-center text-[11px] font-black"
+          style={{ color: "#fda4af", animation: "rbPulseRose 1.5s ease-in-out infinite" }}
+        >
+          ⏰ {fa
+            ? "رنگ‌باز نگفتی! تا نوبتت دوباره برسد دکمهٔ «رنگ‌باز» را بزن وگرنه یک کارت جریمه می‌شوی"
+            : "you didn't call — press the call button before your next turn or draw a penalty card"}
+        </p>
+      )}
 
       {/* دست من — بادبزن */}
       <div className="mt-7">

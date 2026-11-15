@@ -5,7 +5,7 @@
    از st.rangbaz (snapshot سرور) می‌خواند و اکشن‌ها را به API می‌فرستد.
    ================================================================ */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Layers } from "lucide-react";
 import { useLang } from "@/components/site/language-provider";
 import { subscribeStream } from "@/lib/realtime";
@@ -21,6 +21,9 @@ export function RangbazClient({ st, offsetMs }: { st: ArenaStateResponse; offset
   const [busy, setBusy] = useState(false);
   const [flash, setFlash] = useState<{ kind: "ok" | "bad"; text: string } | null>(null);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /* کارت‌هایی که همین الان انداختیم — بلافاصله از دست حذف می‌شوند تا
+     اسنپ‌شات بعدی برسد (وگرنه کارت تا رسیدن استریم در دست می‌ماند) */
+  const [hiddenIds, setHiddenIds] = useState<string[]>([]);
 
   useEffect(() => {
     const unsub = subscribeStream("room", code, {});
@@ -69,6 +72,19 @@ export function RangbazClient({ st, offsetMs }: { st: ArenaStateResponse; offset
     [code, fa],
   );
 
+  /* با هر اسنپ‌شات تازهٔ سرور، فهرست خوش‌بینانه پاک می‌شود — نمای سرور مرجع است */
+  const viewHand = view?.myHand;
+  useEffect(() => {
+    setHiddenIds([]);
+  }, [viewHand]);
+
+  /* نمای نمایشی: کارت‌های تازه‌انداخته‌شده بلافاصله از دست می‌روند */
+  const shownView = useMemo(() => {
+    if (!view || !hiddenIds.length) return view;
+    return { ...view, myHand: view.myHand.filter((c) => !hiddenIds.includes(c.id)) };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, hiddenIds]);
+
   if (!view) {
     return (
       <div className="flex min-h-[60svh] items-center justify-center text-sm font-bold text-zinc-500">
@@ -85,10 +101,16 @@ export function RangbazClient({ st, offsetMs }: { st: ArenaStateResponse; offset
 
   return (
     <RangbazTable
-      view={view}
+      view={shownView}
       fa={fa}
       busy={busy}
-      onPlay={(cardId, opts) => void post("rb_play", { cardId, color: opts?.color, targetId: opts?.targetId, call: opts?.call })}
+      onPlay={(cardId, opts) => {
+        /* حذف خوش‌بینانه — اگر اکشن رد شد، کارت با تلاش مجدد یا اسنپ‌شات برمی‌گردد */
+        setHiddenIds((h) => (h.includes(cardId) ? h : [...h, cardId]));
+        void post("rb_play", { cardId, color: opts?.color, targetId: opts?.targetId, call: opts?.call }).then((ok) => {
+          if (!ok) setHiddenIds((h) => h.filter((x) => x !== cardId));
+        });
+      }}
       onDrawPass={() => void post("rb_draw")}
       onCall={() => void post("rb_call")}
       onCatch={() => void post("rb_catch")}
@@ -122,8 +144,8 @@ export function RangbazClient({ st, offsetMs }: { st: ArenaStateResponse; offset
       footer={
         <p className="mt-3 text-center text-[10px] leading-5 text-zinc-600">
           {fa
-            ? "با یک کارتِ باقی‌مانده دکمهٔ «رنگ‌باز!» را بزن — وگرنه دو کارت جریمه می‌شوی."
-            : "call “one left!” when you have a single card — or take a 2-card penalty."}
+            ? "با یک کارتِ باقی‌مانده دکمهٔ «رنگ‌باز!» را بزن — اگر نگو، در پنجرهٔ لو دادن دو کارت و در برگشتن نوبت یک کارت جریمه می‌شوی."
+            : "call “one left!” with a single card — get caught for 2 cards, or take a 1-card penalty when your turn returns."}
         </p>
       }
     />
