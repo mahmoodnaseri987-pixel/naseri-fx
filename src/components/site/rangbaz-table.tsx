@@ -20,11 +20,15 @@ import {
 import {
   sfxAmbientStart,
   sfxAmbientStop,
-  sfxCapture,
+  sfxCallBell,
+  sfxCardPlay,
+  sfxCatchAlarm,
   sfxDing,
-  sfxHop,
+  sfxDraw,
   sfxIsMuted,
   sfxLose,
+  sfxPenaltyThud,
+  sfxShuffle,
   sfxToggleMuted,
   sfxWin,
 } from "@/lib/arena-sfx";
@@ -356,9 +360,26 @@ function Seat({
       </span>
 
       <p className="mt-1.5 truncate text-[11px] font-black text-zinc-100">{p.name}</p>
-      <p className="mt-0.5 text-[10px] font-bold" style={{ color: p.count === null ? "#a78bfa" : "#a1a1aa" }}>
-        {p.count === null ? `🌫 ${fa ? "نامعلوم" : "?"}` : `${p.count} ${fa ? "کارت" : "cards"}`}
-      </p>
+      {/* تعداد کارت حریف — نشان واضح: تک‌کارت قرمز چشمک‌زن، دو کارت زرد */}
+      <span
+        className="mt-1 inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[12px] font-black tabular-nums"
+        style={
+          p.count === null
+            ? { borderColor: "rgba(167,139,250,.5)", background: "rgba(139,92,246,.12)", color: "#c4b5fd" }
+            : p.count <= 1
+              ? {
+                  borderColor: "rgba(244,63,94,.6)",
+                  background: "rgba(244,63,94,.16)",
+                  color: "#fda4af",
+                  animation: "rbPulseRose 1.5s ease-in-out infinite",
+                }
+              : p.count === 2
+                ? { borderColor: "rgba(251,191,36,.5)", background: "rgba(251,191,36,.12)", color: "#fcd34d" }
+                : { borderColor: "rgba(148,163,184,.35)", background: "rgba(15,15,30,.6)", color: "#e4e4e7" }
+        }
+      >
+        🃏 {p.count === null ? (fa ? "نامعلوم" : "?") : `${p.count} ${fa ? "کارت" : "cards"}`}
+      </span>
       {isTurn && (
         <span
           className="absolute -top-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-2 py-0.5 text-[9px] font-black text-zinc-950"
@@ -398,6 +419,8 @@ export function RangbazTable({ view, fa, busy, onPlay, onDrawPass, onCall, onCat
   const lastTopRef = useRef<string | null>(view.top?.id ?? null);
   const lastMyTurnRef = useRef(view.myTurn);
   const lastPhaseRef = useRef(view.phase);
+  const lastDrewIdRef = useRef<string | null>(null);
+  const lastPenaltyLogRef = useRef("");
   const dealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -416,7 +439,7 @@ export function RangbazTable({ view, fa, busy, onPlay, onDrawPass, onCall, onCat
     const topId = view.top?.id ?? null;
     if (topId !== lastTopRef.current) {
       lastTopRef.current = topId;
-      sfxHop();
+      sfxCardPlay(view.top?.k);
     }
     if (view.color !== lastColorRef.current) {
       lastColorRef.current = view.color;
@@ -424,9 +447,22 @@ export function RangbazTable({ view, fa, busy, onPlay, onDrawPass, onCall, onCat
     }
     if (view.pend > lastPendRef.current) {
       setThrowKey((k) => k + 1);
-      sfxCapture();
+      sfxPenaltyThud();
     }
     lastPendRef.current = view.pend;
+    /* کشیدن کارت — خش‌خش دک */
+    if (view.drew && view.drewId && view.drewId !== lastDrewIdRef.current) {
+      lastDrewIdRef.current = view.drewId;
+      sfxDraw();
+    }
+    if (!view.drew) lastDrewIdRef.current = null;
+    /* جریمهٔ تک‌کارتیِ اعلام‌نکرده — از گزارش سالن */
+    const recentLog = view.log.slice(-4).join("\n");
+    const penaltyLine = view.log.slice(-4).find((l) => l.includes("یک کارت جریمه"));
+    if (penaltyLine && penaltyLine !== lastPenaltyLogRef.current && recentLog) {
+      lastPenaltyLogRef.current = penaltyLine;
+      sfxPenaltyThud();
+    }
     if (view.myTurn && !lastMyTurnRef.current) sfxDing();
     lastMyTurnRef.current = view.myTurn;
     if (view.phase === "done" && lastPhaseRef.current === "play") {
@@ -441,8 +477,9 @@ export function RangbazTable({ view, fa, busy, onPlay, onDrawPass, onCall, onCat
     lastPhaseRef.current = view.phase;
   }, [view.top?.id, view.color, view.pend, view.myTurn, view.phase, view.me, view.result]);
 
-  /* انیمیشن پخش فقط در لحظهٔ ورود به میز */
+  /* انیمیشن پخش فقط در لحظهٔ ورود به میز — با صدای ریخل کارت‌ها */
   useEffect(() => {
+    sfxShuffle();
     dealTimerRef.current = setTimeout(() => setDealOn(false), 1700);
     return () => {
       if (dealTimerRef.current) clearTimeout(dealTimerRef.current);
@@ -479,6 +516,7 @@ export function RangbazTable({ view, fa, busy, onPlay, onDrawPass, onCall, onCat
       setSwapPick(cardId);
       return;
     }
+    if (armedCall) sfxCallBell();
     onPlay(cardId, { call: armedCall });
     setArmedCall(false);
   };
@@ -759,7 +797,10 @@ export function RangbazTable({ view, fa, busy, onPlay, onDrawPass, onCall, onCat
           <button
             type="button"
             disabled={busy || !onCatch}
-            onClick={() => onCatch?.()}
+            onClick={() => {
+              sfxCatchAlarm();
+              onCatch?.();
+            }}
             className="rounded-full bg-rose-500 px-5 py-2.5 text-xs font-black text-zinc-950 active:scale-95"
             style={{ boxShadow: "0 0 24px rgba(244,63,94,.55)", animation: "rbPulseRose 1.1s ease-in-out infinite" }}
           >
@@ -770,7 +811,10 @@ export function RangbazTable({ view, fa, busy, onPlay, onDrawPass, onCall, onCat
           <button
             type="button"
             disabled={busy}
-            onClick={() => onCall()}
+            onClick={() => {
+              sfxCallBell();
+              onCall();
+            }}
             className="rounded-full bg-emerald-400 px-4 py-2 text-xs font-black text-zinc-950 active:scale-95"
             style={{ boxShadow: "0 0 22px rgba(52,211,153,.7)" }}
           >
@@ -879,6 +923,7 @@ export function RangbazTable({ view, fa, busy, onPlay, onDrawPass, onCall, onCat
                   onClick={() => {
                     const cid = colorPick;
                     setColorPick(null);
+                    if (armedCall) sfxCallBell();
                     onPlay(cid, { color: c, call: armedCall });
                     setArmedCall(false);
                   }}
@@ -912,6 +957,7 @@ export function RangbazTable({ view, fa, busy, onPlay, onDrawPass, onCall, onCat
                     onClick={() => {
                       const cid = swapPick;
                       setSwapPick(null);
+                      if (armedCall) sfxCallBell();
                       onPlay(cid, { targetId: p.id, call: armedCall });
                       setArmedCall(false);
                     }}

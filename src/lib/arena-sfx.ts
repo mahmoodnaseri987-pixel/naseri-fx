@@ -260,6 +260,176 @@ export function sfxSurprise(good: boolean): void {
   }
 }
 
+/* ---------- افکت‌های رنگ‌باز — کارت روی میز مخملی ---------- */
+
+/** گذاشتن کارت روی میز — تَلَپ پارچه‌ای + بدنهٔ کف میز؛ نوع کارت رنگ صدا را عوض می‌کند */
+export function sfxCardPlay(kind?: string): void {
+  const c = ensureCtx();
+  if (!c || !master || muted) return;
+  const t0 = c.currentTime + 0.01;
+  /* تلپ کارت — نویز باندپاس کوتاه با sweep پایین‌رونده */
+  const src = noiseSource(c, 0.14);
+  const bp = c.createBiquadFilter();
+  bp.type = "bandpass";
+  bp.frequency.setValueAtTime(2600, t0);
+  bp.frequency.exponentialRampToValueAtTime(700, t0 + 0.1);
+  bp.Q.value = 0.8;
+  const env = c.createGain();
+  env.gain.setValueAtTime(0.16, t0);
+  env.gain.exponentialRampToValueAtTime(0.0002, t0 + 0.12);
+  src.connect(bp);
+  bp.connect(env);
+  env.connect(master);
+  src.start(t0);
+  src.stop(t0 + 0.16);
+  tone(c, master, 210 + Math.random() * 40, t0, 0.09, 0.12, "sine", 120);
+  /* امضای صوتی هر نماد */
+  switch (kind) {
+    case "skip":
+      tone(c, master, 520, t0 + 0.04, 0.16, 0.1, "square", 240);
+      break;
+    case "reverse":
+      tone(c, master, 420, t0 + 0.04, 0.12, 0.09, "triangle", 640);
+      tone(c, master, 640, t0 + 0.13, 0.12, 0.09, "triangle", 420);
+      break;
+    case "draw2":
+      tone(c, master, 300, t0 + 0.05, 0.14, 0.12, "sawtooth", 520);
+      break;
+    case "wild":
+    case "wild4":
+      [660, 880, 1100].forEach((f, i) => tone(c, master, f, t0 + 0.05 + i * 0.05, 0.12, 0.07, "sine"));
+      break;
+    case "mirror":
+      tone(c, master, 1250, t0 + 0.05, 0.3, 0.08, "sine");
+      tone(c, master, 1870, t0 + 0.06, 0.2, 0.04, "sine");
+      break;
+    case "swap":
+      tone(c, master, 740, t0 + 0.05, 0.1, 0.08, "sine");
+      tone(c, master, 980, t0 + 0.14, 0.1, 0.08, "sine");
+      break;
+    case "fog": {
+      const f = noiseSource(c, 0.55);
+      const lp = c.createBiquadFilter();
+      lp.type = "lowpass";
+      lp.frequency.value = 500;
+      const ge = c.createGain();
+      ge.gain.setValueAtTime(0.0001, t0 + 0.04);
+      ge.gain.linearRampToValueAtTime(0.07, t0 + 0.14);
+      ge.gain.exponentialRampToValueAtTime(0.0002, t0 + 0.55);
+      f.connect(lp);
+      lp.connect(ge);
+      ge.connect(master);
+      f.start(t0 + 0.04);
+      f.stop(t0 + 0.6);
+      break;
+    }
+  }
+}
+
+/** کشیدن کارت از دک — خش‌خش کوتاه پارچه */
+export function sfxDraw(): void {
+  const c = ensureCtx();
+  if (!c || !master || muted) return;
+  const t0 = c.currentTime + 0.01;
+  const src = noiseSource(c, 0.1);
+  const bp = c.createBiquadFilter();
+  bp.type = "bandpass";
+  bp.frequency.setValueAtTime(1900, t0);
+  bp.frequency.exponentialRampToValueAtTime(900, t0 + 0.08);
+  bp.Q.value = 0.9;
+  const env = c.createGain();
+  env.gain.setValueAtTime(0.09, t0);
+  env.gain.exponentialRampToValueAtTime(0.0002, t0 + 0.09);
+  src.connect(bp);
+  bp.connect(env);
+  env.connect(master);
+  src.start(t0);
+  src.stop(t0 + 0.11);
+}
+
+/** پخش اولیهٔ دست — ریخل چندتایی کارت‌ها */
+export function sfxShuffle(): void {
+  const c = ensureCtx();
+  if (!c || !master || muted) return;
+  let t = c.currentTime + 0.05;
+  for (let i = 0; i < 7; i++) {
+    const src = noiseSource(c, 0.07);
+    const bp = c.createBiquadFilter();
+    bp.type = "bandpass";
+    bp.frequency.value = 1400 + Math.random() * 2200;
+    bp.Q.value = 1.2;
+    const env = c.createGain();
+    env.gain.setValueAtTime(0.055, t);
+    env.gain.exponentialRampToValueAtTime(0.0002, t + 0.055);
+    src.connect(bp);
+    bp.connect(env);
+    env.connect(master);
+    src.start(t);
+    src.stop(t + 0.08);
+    t += 0.055 + Math.random() * 0.035;
+  }
+}
+
+/** زنگ «رنگ‌باز!» — دو دینگ روشن پشت‌سرهم */
+export function sfxCallBell(): void {
+  const c = ensureCtx();
+  if (!c || !master || muted) return;
+  const t0 = c.currentTime + 0.01;
+  for (let i = 0; i < 2; i++) {
+    const t = t0 + i * 0.13;
+    tone(c, master, 1318.51, t, 0.35, 0.13, "sine");
+    tone(c, master, 1760, t + 0.005, 0.22, 0.05, "sine");
+    tone(c, master, 659.25, t + 0.005, 0.28, 0.05, "sine");
+  }
+}
+
+/** آژیر لو دادن — بازر کوتاه دو ضرب */
+export function sfxCatchAlarm(): void {
+  const c = ensureCtx();
+  if (!c || !master || muted) return;
+  const t0 = c.currentTime + 0.01;
+  for (let i = 0; i < 2; i++) {
+    tone(c, master, 880, t0 + i * 0.16, 0.13, 0.12, "square", 620);
+  }
+  const src = noiseSource(c, 0.1);
+  const bp = c.createBiquadFilter();
+  bp.type = "bandpass";
+  bp.frequency.value = 1500;
+  bp.Q.value = 1;
+  const env = c.createGain();
+  env.gain.setValueAtTime(0.08, t0);
+  env.gain.exponentialRampToValueAtTime(0.0002, t0 + 0.09);
+  src.connect(bp);
+  bp.connect(env);
+  env.connect(master);
+  src.start(t0);
+  src.stop(t0 + 0.12);
+}
+
+/** فرود کارت‌های جریمه — تام بم + ریخل سنگین */
+export function sfxPenaltyThud(): void {
+  const c = ensureCtx();
+  if (!c || !master || muted) return;
+  const t0 = c.currentTime + 0.01;
+  tone(c, master, 160, t0, 0.22, 0.2, "sine", 85);
+  woodKnock(c, master, t0 + 0.02, 140, 0.16, 0);
+  woodKnock(c, master, t0 + 0.11, 125, 0.11, -0.12);
+  const src = noiseSource(c, 0.16);
+  const bp = c.createBiquadFilter();
+  bp.type = "bandpass";
+  bp.frequency.setValueAtTime(1200, t0);
+  bp.frequency.exponentialRampToValueAtTime(500, t0 + 0.14);
+  bp.Q.value = 0.8;
+  const env = c.createGain();
+  env.gain.setValueAtTime(0.1, t0);
+  env.gain.exponentialRampToValueAtTime(0.0002, t0 + 0.15);
+  src.connect(bp);
+  bp.connect(env);
+  env.connect(master);
+  src.start(t0);
+  src.stop(t0 + 0.18);
+}
+
 /* ---------- موزیک ملایم پس‌زمینه ---------- */
 
 function scheduleChord(): void {

@@ -134,15 +134,15 @@ export function rbPlayable(card: RbCard, st: RbState): boolean {
   const top = topOf(st);
   if (!top) return true;
   if (st.pend > 0) {
-    /* جریمهٔ در انتظار فقط با کارت جریمهٔ هم‌خانواده پوشانده می‌شود */
-    if (st.pendK === "draw2") return card.k === "draw2" || card.k === "wild4";
+    /* جریمهٔ در انتظار فقط با +۲ هم‌رنگ یا +۴ پوشانده می‌شود */
+    if (st.pendK === "draw2") return card.k === "wild4" || (card.k === "draw2" && card.c === st.color);
     return card.k === "wild4";
   }
   if (card.k === "wild" || card.k === "wild4" || card.k === "mirror" || card.k === "swap" || card.k === "fog") {
     return true;
   }
+  /* تطابق فقط با رنگِ فعال یا همان عدد — نمادِ متفاوت‌رنگ (ممنوع/برگشت/+۲) قبول نیست */
   if (card.c && card.c === st.color) return true;
-  if (card.k === top.k && card.k !== "num") return true; // ممنوع↔ممنوع، برگشت↔برگشت، +۲↔+۲
   if (card.k === "num" && top.k === "num" && card.n === top.n) return true;
   return false;
 }
@@ -214,6 +214,8 @@ export function rbPlay(
   st.pile.push(card);
   st.lastPlay = { id: playerId, cardId };
   st.callOpen = null;
+  /* رنگ فعال از کارت رنگیِ انداخته‌شده پیروی می‌کند — بدون این، تطابق رنگی از کارت اول قفل می‌ماند */
+  if (card.c) st.color = card.c;
 
   const nameOf = (id: string) => handOf(st, id)?.name ?? "؟";
 
