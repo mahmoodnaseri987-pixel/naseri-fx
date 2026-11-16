@@ -472,8 +472,8 @@ export function RangbazSolo() {
           </p>
           <p className="mt-1.5 text-[11px] leading-5 text-zinc-500">
             {fa
-              ? "هر روز یک دست ثابت و مشترک برای همه — سه ربات حرفه‌ای؛ بهترین امتیازت ثبت می‌شود."
-              : "One shared fixed deal each day — three pro bots; your best score is saved."}
+              ? "هر بازی با ورقِ تازه و تصادفی — سه ربات حرفه‌ای؛ بهترین امتیاز روزت ثبت می‌شود."
+              : "A fresh random deal every game — three pro bots; your best daily score is saved."}
           </p>
           <p className="mt-2 text-xs font-bold" style={{ color: dailyToday ? "#fbbf24" : "#71717a" }}>
             {fa ? "بهترین امتیاز امروز شما: " : "your best today: "}
@@ -484,7 +484,8 @@ export function RangbazSolo() {
             type="button"
             onClick={() => {
               setMode("daily");
-              startGame({ bots: 3, diff: 2, seed: dailySeed() });
+              /* ورق تصادفی در هر بازی — seed ثابت حذف شد */
+              startGame({ bots: 3, diff: 2 });
             }}
             className="mt-3 w-full rounded-2xl bg-gradient-to-l from-sky-400 to-cyan-400 py-3.5 text-sm font-black text-zinc-950 active:scale-95"
             style={{ boxShadow: "0 0 30px rgba(56,189,248,.35)" }}

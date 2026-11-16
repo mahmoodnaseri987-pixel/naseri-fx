@@ -55,7 +55,8 @@ export function rbCreateState(
     deck,
     pile: [],
     color: "red",
-    cur: 0,
+    /* صندلی شروع تصادفی — شانس برد برای همهٔ صندلی‌ها یکسان است */
+    cur: Math.floor(Math.random() * ps.length),
     dir: 1,
     pend: 0,
     pendK: null,
