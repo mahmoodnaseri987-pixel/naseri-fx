@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { SherTrimDialog } from "@/components/site/sher-trim-dialog";
+import { SherClipEncoder } from "@/components/site/sher-clip-encoder";
 import { SherLoginForm } from "@/components/site/sher-login-form";
 import { SHER_CATEGORIES, SHER_CATEGORY_SONGS_MAX, type SherCategory } from "@/lib/sher-shared";
 
@@ -563,6 +564,11 @@ export function SherAdminClient() {
   const [uploadCategory, setUploadCategory] = useState<SherCategory>("nostalgia"); // بخش مقصد آپلود
   const [catFilter, setCatFilter] = useState<CatFilter>("all"); // تب فیلتر فهرست
 
+  /* برش قبل از آپلود — پیش‌فرض روشن: فایل کامل در مرورگر به کلیپ ۲۰ثانیه‌ای
+     MP3 (۱۲۸kbps) تبدیل می‌شود و فقط همان آپلود می‌شود؛ آپلود کامل اختیاری است */
+  const [trimMode, setTrimMode] = useState(true);
+  const [clipFlow, setClipFlow] = useState<{ files: File[]; idx: number } | null>(null);
+
   /* شمارش بخش‌ها — فقط ردیف‌های فایل‌دار (همان مبنای گیت سقف ۲۰ در سرور) */
   const fileRows = rows.filter((r) => r.exists);
   const catCount = (c: string) => fileRows.filter((r) => r.category === c).length;
@@ -713,8 +719,76 @@ export function SherAdminClient() {
   }
 
   function onPick(e: ChangeEvent<HTMLInputElement>) {
-    setPicked(Array.from(e.target.files ?? []));
+    const files = Array.from(e.target.files ?? []);
     setUploadMsg(null);
+    if (trimMode) {
+      /* حالت برش: هر فایل پشت‌سرهم به پنجرهٔ برش می‌رود و فقط کلیپش آپلود می‌شود */
+      if (files.length > 0) setClipFlow({ files, idx: 0 });
+      setPicked([]);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    } else {
+      setPicked(files);
+    }
+  }
+
+  /* آپلودِ کلیپ بریده‌شده + ریست clipStart به صفر (کلیپ از ثانیهٔ ۰ پخش می‌شود؛
+     متادیتای قبلی ردیف همنام حفظ و فقط clipStart صفر می‌شود) */
+  async function handleClipEncoded(clip: Blob, filename: string): Promise<void> {
+    const flow = clipFlow;
+    if (!flow || uploading) return;
+    setUploading(true);
+    setUploadMsg(null);
+    try {
+      const clipFile = new File([clip], filename, { type: "audio/mpeg" });
+      await uploadOneFile(clipFile, flow.idx + 1, flow.files.length, uploadCategory);
+      const row = rows.find((r) => r.filename === filename);
+      const payload = {
+        filename,
+        title: row?.title ?? "",
+        artist: row?.artist ?? "",
+        clipStart: 0,
+        answerLine: row?.answerLine ?? "",
+        contextLines: row?.contextLines ?? [],
+        extraLines: row?.extraLines ?? [],
+        active: row?.active ?? false,
+        category: row?.category || uploadCategory,
+      };
+      const res = await fetch("/api/sher/admin/songs/upsert", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const d = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(d.error || "ثبت clipStart ناموفق بود.");
+      if (flow.idx + 1 < flow.files.length) {
+        setClipFlow({ files: flow.files, idx: flow.idx + 1 });
+      } else {
+        setClipFlow(null);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+        setUploadMsg({
+          ok: true,
+          text:
+            (flow.files.length > 1 ? `${faDigits(flow.files.length)} کلیپ آپلود شد` : "کلیپ آپلود شد") +
+            ` (~${faDigits(Math.max(1, Math.round(clip.size / 1024)))} کیلوبایت به‌جای چند مگابایت)` +
+            " — انتشار خودکار ۲-۳ دقیقه‌ای؛ بعد «به‌روزرسانی فهرست» را بزن." +
+            " اگر نام فایلی از قبل موجود بوده، نسخهٔ کلیپ جایگزین فایل کامل شده است.",
+        });
+      }
+    } catch (e) {
+      if (e instanceof SherAuthError) {
+        setNeedsLogin(true);
+        setClipFlow(null);
+      } else {
+        setUploadMsg({
+          ok: false,
+          text: e instanceof Error ? e.message : "آپلود کلیپ ناموفق بود — دوباره تلاش کنید.",
+        });
+        setClipFlow(null);
+      }
+    } finally {
+      setUploading(false);
+      setProgress("");
+    }
   }
 
   /* نشست بخش شعر منقضی/نامعتبر است — کل پنل با فرم ورود بخش شعر جایگزین می‌شود */
@@ -805,6 +879,35 @@ export function SherAdminClient() {
           {uploadFull && (
             <p className="mt-2 text-xs font-bold text-rose-300">
               بخش {CAT_LABELS[uploadCategory]} پر است ({faDigits(SHER_CATEGORY_SONGS_MAX)} آهنگ)
+            </p>
+          )}
+          <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs">
+            <label className="flex cursor-pointer items-center gap-2 font-bold text-emerald-300">
+              <input
+                type="radio"
+                name="upload-mode"
+                checked={trimMode}
+                onChange={() => setTrimMode(true)}
+                disabled={uploading}
+                className="h-3.5 w-3.5 accent-emerald-500"
+              />
+              ✂️ برش ۲۰ثانیه‌ای و آپلود کلیپ (پیشنهادی — ~۳۰۰ کیلوبایت)
+            </label>
+            <label className="flex cursor-pointer items-center gap-2 text-zinc-400">
+              <input
+                type="radio"
+                name="upload-mode"
+                checked={!trimMode}
+                onChange={() => setTrimMode(false)}
+                disabled={uploading}
+                className="h-3.5 w-3.5 accent-zinc-500"
+              />
+              آپلود کامل فایل (تا ۱۵ مگابایت)
+            </label>
+          </div>
+          {trimMode && (
+            <p className="mt-1.5 text-[11px] leading-5 text-zinc-500">
+              با انتخاب فایل، پنجرهٔ برش با موج‌نگار باز می‌شود — بازهٔ ۲۰ثانیه‌ای دلخواه را انتخاب کن و فقط همان آپلود می‌شود؛ بازی هم بدون تنظیم دستی زمان شروع، همان کلیپ را پخش می‌کند.
             </p>
           )}
           <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -918,6 +1021,17 @@ export function SherAdminClient() {
           </>
         )}
       </main>
+
+      {/* پنجرهٔ برش قبل از آپلود — فایل انتخاب‌شدهٔ جاری از صف (key = ریمونت برای هر فایل) */}
+      {clipFlow && clipFlow.files[clipFlow.idx] && (
+        <SherClipEncoder
+          key={`${clipFlow.files[clipFlow.idx].name}-${clipFlow.idx}`}
+          file={clipFlow.files[clipFlow.idx]}
+          busy={uploading}
+          onEncoded={handleClipEncoded}
+          onClose={() => setClipFlow(null)}
+        />
+      )}
     </div>
   );
 }
