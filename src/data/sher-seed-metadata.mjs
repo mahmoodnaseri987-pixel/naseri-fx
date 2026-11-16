@@ -6,7 +6,7 @@
    idempotent است — در هر build دوباره اجرا می‌شود و بی‌ضرر است.
    خطا deploy را نمی‌شکند (log و exit 0) — متادیتا جنبهٔ محتوایی دارد. */
 
-const { PrismaClient } = require("@prisma/client");
+import { PrismaClient } from "@prisma/client";
 
 const SONGS = [
   {
