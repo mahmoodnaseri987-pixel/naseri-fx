@@ -85,6 +85,44 @@ function toInt16(src: Float32Array, from: number, to: number): Int16Array {
   return out;
 }
 
+/* RMS هر ثانیه → بهترین پنجرهٔ کلیپ: بیشینهٔ انرژی، ثانیه‌های سکوت جریمه،
+   ۵ ثانیهٔ اول و ۱۰ ثانیهٔ آخر کنار گذاشته می‌شوند — برای «انتخاب خودکار» */
+function bestWindowStart(buffer: AudioBuffer): number {
+  const sr = buffer.sampleRate;
+  const nSec = Math.floor(buffer.length / sr);
+  if (nSec <= CLIP_SECONDS + 2) return 0;
+  const ch0 = buffer.getChannelData(0);
+  const rms: number[] = [];
+  for (let s = 0; s < nSec; s++) {
+    const off = s * sr;
+    let sum = 0;
+    for (let i = off; i < off + sr; i += 2) {
+      const v = ch0[i] ?? 0;
+      sum += v * v;
+    }
+    rms.push(Math.sqrt(sum / (sr / 2)));
+  }
+  const minStart = Math.max(0, Math.min(5, nSec - CLIP_SECONDS));
+  const maxStart = Math.max(minStart, nSec - CLIP_SECONDS - 2);
+  let best = minStart;
+  let bestScore = -Infinity;
+  for (let s = minStart; s <= maxStart; s++) {
+    let sum = 0;
+    let quiet = 0;
+    for (let i = s; i < s + CLIP_SECONDS; i++) {
+      const v = rms[i] ?? 0;
+      sum += v;
+      if (v < 0.02) quiet++;
+    }
+    const score = sum - quiet * 0.5 * 0.02 * CLIP_SECONDS;
+    if (score > bestScore) {
+      bestScore = score;
+      best = s;
+    }
+  }
+  return best;
+}
+
 export function SherClipEncoder({
   file,
   busy = false,
@@ -244,7 +282,8 @@ export function SherClipEncoder({
         decodedRef.current = decoded;
         const peaks = computePeaks(decoded, PEAK_BUCKETS);
         setWave({ phase: "ready", duration: decoded.duration, peaks });
-        setStart((s) => clampStart(s, decoded.duration));
+        /* انتخاب خودکار بهترین بازه — کاربر فقط تأیید یا تنظیم ریز می‌کند */
+        setStart(clampStart(bestWindowStart(decoded), decoded.duration));
       } catch {
         if (!cancelled)
           setWave({
@@ -548,6 +587,19 @@ export function SherClipEncoder({
                 />
                 پخش تکراری
               </label>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => {
+                  const decoded = decodedRef.current;
+                  if (!decoded) return; // فقط پس از decode موفق مقدار دارد
+                  stopPlayback();
+                  setStart(clampStart(bestWindowStart(decoded), decoded.duration));
+                }}
+                className="h-9 rounded-xl border border-emerald-700 bg-emerald-950/50 text-xs text-emerald-300 hover:bg-emerald-900/60"
+              >
+                ✨ انتخاب خودکار بهترین بازه
+              </Button>
               <span className="text-[11px] text-zinc-500" dir="ltr">
                 {fmt1(startRef.current)}s → {fmt1(startRef.current + win)}s ({fmt1(win)}s)
               </span>
