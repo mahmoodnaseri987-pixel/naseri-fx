@@ -5,7 +5,7 @@
   "scripts": {
     "prebuild": "node src/data/sher-scan.mjs",
     "dev": "next dev -p 3000 2>&1 | tee dev.log",
-    "build": "export DATABASE_URL=\"${DATABASE_URL:-${DATABASE_URL_POSTGRES_URL_NON_POOLING:-${DATABASE_URL_POSTGRES_URL:-${DATABASE_URL_POSTGRES_PRISMA_URL:-$DATABASE_URL_DATABASE_URL}}}}\" && prisma generate && prisma db push --accept-data-loss --skip-generate && node scripts/sher_seed_metadata.mjs && next build",
+    "build": "export DATABASE_URL=\"${DATABASE_URL:-${DATABASE_URL_POSTGRES_URL_NON_POOLING:-${DATABASE_URL_POSTGRES_URL:-${DATABASE_URL_POSTGRES_PRISMA_URL:-$DATABASE_URL_DATABASE_URL}}}}\" && prisma generate && prisma db push --accept-data-loss --skip-generate && node src/data/sher-seed-metadata.mjs && next build",
     "start": "NODE_ENV=production bun .next/standalone/server.js 2>&1 | tee server.log",
     "lint": "eslint .",
     "db:push": "prisma db push --accept-data-loss",
